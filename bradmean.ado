@@ -117,7 +117,7 @@ syntax varlist(numeric), [SVY OVER(varlist)];
       {;
         di in gr %-12s "`name'" " | " in ye %11.0g results_`i'[1,1] " | " in ye %11.0g results_`i'[2,1] " | "
                                       in ye %11.0g results_`i'[5,1] " | " in ye %11.0g results_`i'[6,1] " | "
-                                      in ye %11.0fc obs_`i';
+                                      in ye %11.0fc `obs_`i'';
       };
       else
       {;
