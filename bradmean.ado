@@ -115,8 +115,8 @@ syntax varlist(numeric), [SVY OVER(varlist)];
 
       if("`over'"=="")
       {;
-        di in gr %-12s "`name'" " | " in ye %11.0g results_`i'[1,1] " | " in ye %11.0g results_`i'[2,1] " | "
-                                      in ye %11.0g results_`i'[5,1] " | " in ye %11.0g results_`i'[6,1] " | "
+        di in gr %-12s "`name'" " | " in ye %11.6g results_`i'[1,1] " | " in ye %11.6g results_`i'[2,1] " | "
+                                      in ye %11.6g results_`i'[5,1] " | " in ye %11.6g results_`i'[6,1] " | "
                                       in ye %11.0fc `obs_`i'';
       };
       else
@@ -128,22 +128,24 @@ syntax varlist(numeric), [SVY OVER(varlist)];
           {;
             di in gr %-12s "`name'" " |             |             |             |             |             |";
           };
-          di in gr %12s "`poplabel'" " | " in ye %11.0g results_`i'[1,`j'] " | " in ye %11.0g results_`i'[2,`j'] " | "
-                                           in ye %11.0g results_`i'[5,`j'] " | " in ye %11.0g results_`i'[6,`j'] " | "
+          di in gr %12s "`poplabel'" " | " in ye %11.6g results_`i'[1,`j'] " | " in ye %11.6g results_`i'[2,`j'] " | "
+                                           in ye %11.6g results_`i'[5,`j'] " | " in ye %11.6g results_`i'[6,`j'] " | "
                                            in ye %11.4f `pval_`i''         " | " in ye %11.0fc subpop_`i'[1,`j'];
         };
       };
 
-      if("`over'"=="")
-      {;
-        di "-------------+-------------+-------------+-------------+-------------+-------------";
-      };
-      else
+      if("`over'"!="")
       {;
         di "-------------+-------------+-------------+-------------+-------------+-------------+-------------";
       };
     };
 
+  /* Outputting Footer */
+
+    if("`over'"=="")
+    {;
+      di "-------------+-------------+-------------+-------------+-------------+-------------";
+    };
 
 end;
 
