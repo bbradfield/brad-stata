@@ -1,0 +1,13 @@
+d 'bradmean': module
+d
+d   Computes multiple independent means in a single table
+d
+d Version 2.1.1
+d
+d Distribution-Date: 14mar2016
+d
+d Author: Brian Bradfield
+d Support: email bbradfield@rti.org
+d
+f bradmean.ado
+f bradmean.sthlp

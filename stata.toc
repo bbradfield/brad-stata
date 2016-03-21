@@ -1,0 +1,6 @@
+v 3
+d Stata packages developed by bbradfield
+
+* See: -help usersite-
+
+t stata
