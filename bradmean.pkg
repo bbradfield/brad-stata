@@ -1,4 +1,4 @@
-d 'bradmean': module
+d 'bradmean': module to compute multiple independent means in a single table
 d
 d   Computes multiple independent means in a single table
 d
