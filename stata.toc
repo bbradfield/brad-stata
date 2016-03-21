@@ -1,6 +1,4 @@
 v 3
 d Stata packages developed by bbradfield
-
-* See: -help usersite-
-
-t stata
+d Brian Bradfield (bbradfield@rti.org)
+p bradmean - Computes individual means
