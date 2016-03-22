@@ -8,8 +8,8 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.1.1                                                **
-**   Date:         03/14/2016                                           **
+**   Version:      2.2.4                                                **
+**   Date:         03/22/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -24,6 +24,13 @@ syntax varlist(numeric), [SVY OVER(varlist)];
     tokenize `varlist';
 
     local length = 13;
+    forvalues i = 1/`varlistlength'
+    {;
+      if(length("``i''")>13)
+      {;
+        local length = length("``i''") + 1;
+      };
+    };
 
   /* Setting Options */
 
@@ -108,35 +115,31 @@ syntax varlist(numeric), [SVY OVER(varlist)];
     forvalues i = 1/`varlistlength'
     {;
       local name = "``i''";
-      if(length("``i''")>12)
-      {;
-        local name = substr("``i''",1,12);
-      };
 
       if("`over'"=="")
       {;
-        di in gr %-12s "`name'" " | " in ye %11.6f results_`i'[1,1] " | " in ye %11.6f results_`i'[2,1] " | "
-                                      in ye %11.6f results_`i'[5,1] " | " in ye %11.6f results_`i'[6,1] " | "
-                                      in ye %11.0fc `obs_`i'';
+        di in gr %`=`length'-1's "`name'" " | " in ye %11.6f results_`i'[1,1] " | " in ye %11.6f results_`i'[2,1] " | "
+                                                in ye %11.6f results_`i'[5,1] " | " in ye %11.6f results_`i'[6,1] " | "
+                                                in ye %11.0fc `obs_`i'';
       };
       else
       {;
         forvalues j = 1/`n_over'
         {;
-          local poplabel = substr("_subpop_`j'",1,12);
+          local poplabel = substr("_subpop_`j'",1,`=`length'-1');
           if(`j'==1)
           {;
-            di in gr %-12s "`name'" " |             |             |             |             |             |";
+            di in gr %-`=`length'-1's "`name'" " |             |             |             |             |             |";
           };
-          di in gr %12s "`poplabel'" " | " in ye %11.6f results_`i'[1,`j'] " | " in ye %11.6f results_`i'[2,`j'] " | "
-                                           in ye %11.6f results_`i'[5,`j'] " | " in ye %11.6f results_`i'[6,`j'] " | "
-                                           in ye %11.4f `pval_`i''         " | " in ye %11.0fc subpop_`i'[1,`j'];
+          di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.6f results_`i'[1,`j'] " | " in ye %11.6f results_`i'[2,`j'] " | "
+                                                      in ye %11.6f results_`i'[5,`j'] " | " in ye %11.6f results_`i'[6,`j'] " | "
+                                                      in ye %11.4f `pval_`i''         " | " in ye %11.0fc subpop_`i'[1,`j'];
         };
       };
 
       if("`over'"!="")
       {;
-        di "-------------+-------------+-------------+-------------+-------------+-------------+-------------";
+        di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
       };
     };
 
@@ -144,7 +147,7 @@ syntax varlist(numeric), [SVY OVER(varlist)];
 
     if("`over'"=="")
     {;
-      di "-------------+-------------+-------------+-------------+-------------+-------------";
+      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
     };
 
 end;
