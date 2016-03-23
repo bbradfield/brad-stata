@@ -16,7 +16,7 @@ set linesize 255;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric), [SVY OVER(varlist(numeric))];
+syntax varlist(numeric), [SVY OVER(varlist numeric)];
 
   /* Creating VarList Macros */
 
