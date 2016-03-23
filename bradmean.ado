@@ -8,15 +8,15 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.2.4                                                **
-**   Date:         03/22/2016                                           **
+**   Version:      2.3.2                                                **
+**   Date:         03/23/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric), [SVY OVER(varlist)];
+syntax varlist(numeric), [SVY OVER(varlist(numeric))];
 
   /* Creating VarList Macros */
 
