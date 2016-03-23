@@ -25,7 +25,7 @@
 {syntab:Main}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
 {synopt :{cmd:over(}{it:{help varlist}}{cmd:)}}group over
-subpopulations defined by {it:varlist}; optionally, suppress group labels{p_end}
+subpopulations defined by {it:varlist}{p_end}
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
