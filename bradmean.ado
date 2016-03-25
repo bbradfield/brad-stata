@@ -8,17 +8,17 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.3.2                                                **
-**   Date:         03/23/2016                                           **
+**   Version:      2.7.2                                                **
+**   Date:         03/25/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric), [SVY OVER(varlist numeric)];
+syntax varlist(numeric), [SVY OVER(varname numeric)];
 
-  /* Creating VarList Macros */
+  /* Creating Varlist Macros */
 
     local varlistlength : list sizeof varlist;
     tokenize `varlist';
@@ -46,29 +46,47 @@ syntax varlist(numeric), [SVY OVER(varlist numeric)];
       local opt_svy = "svy: ";
     };
 
+  /* Finding Unique Values of Over */
+
+    if("`over'"!="")
+    {;
+      qui tempname freq code;
+      qui tab `over', matcell(`freq') matrow(`code');
+      local subpop_count = rowsof(`freq');
+
+      forvalues i = 1/`subpop_count'
+      {;
+        local ci = `code'[`i',1];
+        local subpop_label_`i' : label (`over') `ci';
+      };
+    };
+
   /* Creating Values to be Returned */
 
     forvalues i = 1/`varlistlength'
     {;
+      /* Observations */
       qui count if !missing(``i'');
       local obs_`i' = r(N);
 
+      /* Mean Results */
       qui `opt_svy' mean ``i'' `opt_over';
 
       matrix results_`i' = r(table);
       matrix subpop_`i' = e(_N);
 
-      local n_over = e(N_over);
-      local n_over_names = e(over_namelist);
-      local n_over_labels = e(over_labels);
-      local n_length = length("_subpop_`n_over'")+1;
+      local n_over_`i' = e(N_over);
+      local n_over_names_`i' = e(over_namelist);
+      local n_over_labels_`i' = e(over_labels);
 
-      if("`over'"!="")
+      /* Testing */
+      local pval_`i' = .;
+      if(`n_over_`i''>1 & `n_over_`i''!=.)
       {;
         local test_var = "";
-        forvalues j = 1/`n_over'
+        forvalues j = 1/`n_over_`i''
         {;
-          local over_name : word `j' of `n_over_names';
+          local over_name : word `j' of `n_over_names_`i'';
           if(`j'!=1)
           {;
             local test_var = "`test_var'" + " == ";
@@ -84,13 +102,18 @@ syntax varlist(numeric), [SVY OVER(varlist numeric)];
 
     if("`over'"!="")
     {;
-      local overlist = subinstr("`over'"," ",",",.);
+      local n_length = length("_subpop_`subpop_count'")+1;
       di;
-      di "SubPopulations - `overlist'";
-      forvalues j = 1/`n_over'
+      di "SubPopulations - `over'";
+      di;
+      forvalues i = 1/`subpop_count'
       {;
-        local poplabel : word `j' of `n_over_labels';
-        di "_subpop_`j'" _col(`n_length') " | " `""`poplabel'""';
+        di "_subpop_`i'" _col(`n_length') " | `over' = " `"""' "`subpop_label_`i''" `"""';
+      };
+
+      if(`n_length'>`length')
+      {;
+        local length = `n_length';
       };
     };
 
@@ -124,21 +147,30 @@ syntax varlist(numeric), [SVY OVER(varlist numeric)];
       };
       else
       {;
-        forvalues j = 1/`n_over'
+        di in gr %-`=`length'-1's "`name'" " |             |             |             |             |             |";
+
+        local pop = 1;
+        forvalues j = 1/`subpop_count'
         {;
           local poplabel = substr("_subpop_`j'",1,`=`length'-1');
-          if(`j'==1)
+          local templabel : word `pop' of `n_over_labels_`i'';
+          if("`templabel'"=="`subpop_label_`j''")
           {;
-            di in gr %-`=`length'-1's "`name'" " |             |             |             |             |             |";
+            di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.6f results_`i'[1,`pop'] " | " in ye %11.6f results_`i'[2,`pop'] " | "
+                                                        in ye %11.6f results_`i'[5,`pop'] " | " in ye %11.6f results_`i'[6,`pop'] " | "
+                                                        in ye %11.4f `pval_`i''           " | " in ye %11.0fc subpop_`i'[1,`pop'];
+            local pop = `pop' + 1;
           };
-          di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.6f results_`i'[1,`j'] " | " in ye %11.6f results_`i'[2,`j'] " | "
-                                                      in ye %11.6f results_`i'[5,`j'] " | " in ye %11.6f results_`i'[6,`j'] " | "
-                                                      in ye %11.4f `pval_`i''         " | " in ye %11.0fc subpop_`i'[1,`j'];
+          else
+          {;
+            local fakeval = .;
+            local fakepop = 0;
+            di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.6f `fakeval' " | " in ye %11.6f `fakeval'  " | "
+                                                        in ye %11.6f `fakeval' " | " in ye %11.6f `fakeval'  " | "
+                                                        in ye %11.4f `fakeval' " | " in ye %11.0fc `fakepop';
+          };
         };
-      };
 
-      if("`over'"!="")
-      {;
         di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
       };
     };
@@ -149,6 +181,8 @@ syntax varlist(numeric), [SVY OVER(varlist numeric)];
     {;
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
     };
+
+
 
 end;
 
