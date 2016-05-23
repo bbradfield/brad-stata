@@ -8,15 +8,15 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.7.2                                                **
-**   Date:         03/25/2016                                           **
+**   Version:      2.8.0                                                **
+**   Date:         05/23/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric), [SVY OVER(varname numeric)];
+syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
 
   /* Creating Varlist Macros */
 
@@ -26,7 +26,7 @@ syntax varlist(numeric), [SVY OVER(varname numeric)];
     local length = 13;
     forvalues i = 1/`varlistlength'
     {;
-      if(length("``i''")>13)
+      if(length("``i''")>`length')
       {;
         local length = length("``i''") + 1;
       };
@@ -98,55 +98,66 @@ syntax varlist(numeric), [SVY OVER(varname numeric)];
       };
     };
 
-  /* Outputting Sub-Population Labels */
+  /* Sub-Population Labels */
 
     if("`over'"!="")
     {;
       local n_length = length("_subpop_`subpop_count'")+1;
+      local header = "";
       di;
       di "SubPopulations - `over'";
       di;
+
       forvalues i = 1/`subpop_count'
       {;
         di "_subpop_`i'" _col(`n_length') " | `over' = " `"""' "`subpop_label_`i''" `"""';
+
+        local temp_len = 10 - length("_subpop_`i'");
+        local temp_lab = "| ";
+        local temp_lab = "`temp_lab'" + " "*`temp_len';
+        local temp_lab = "`temp_lab' _subpop_`i' ";
+        local header = "`header'`temp_lab'";
       };
 
-      if(`n_length'>`length')
+      if(`n_length'>`length' & "`wide'"=="")
       {;
         local length = `n_length';
       };
     };
 
-  /* Outputting Header */
+  /* Output - No Over */
 
-    di;
     if("`over'"=="")
     {;
+      di;
       di _dup(`length') "-" "----------------------------------------------------------------------";
       di _dup(`length') " " "|        Mean |   Std. Err. | 95% LowerCI | 95% UpperCI |        Obs.";
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
-    };
-    else
-    {;
-      di _dup(`length') "-" "------------------------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | 95% LowerCI | 95% UpperCI |   P Value   |        Obs.";
-      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
-    };
 
-  /* Outputting Results */
-
-    forvalues i = 1/`varlistlength'
-    {;
-      local name = "``i''";
-
-      if("`over'"=="")
+      forvalues i = 1/`varlistlength'
       {;
+        local name = "``i''";
         di in gr %`=`length'-1's "`name'" " | " in ye %11.6f results_`i'[1,1] " | " in ye %11.6f results_`i'[2,1] " | "
                                                 in ye %11.6f results_`i'[5,1] " | " in ye %11.6f results_`i'[6,1] " | "
                                                 in ye %11.0fc `obs_`i'';
       };
-      else
+
+      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
+    };
+
+  /* Output - Over, Long */
+
+    if("`over'"!="" & "`wide'"=="")
+    {;
+      di;
+      di _dup(`length') "-" "------------------------------------------------------------------------------------";
+      di _dup(`length') " " "|        Mean |   Std. Err. | 95% LowerCI | 95% UpperCI |   P Value   |        Obs.";
+      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
+
+      forvalues i = 1/`varlistlength'
       {;
+        local name = "``i''";
+
         di in gr %-`=`length'-1's "`name'" " |             |             |             |             |             |";
 
         local pop = 1;
@@ -175,14 +186,53 @@ syntax varlist(numeric), [SVY OVER(varname numeric)];
       };
     };
 
-  /* Outputting Footer */
+  /* Output - Over, Wide */
 
-    if("`over'"=="")
+    if("`over'"!="" & "`wide'"!="")
     {;
-      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
+      di;
+      di _dup(`length') "-" _dup(`=`subpop_count'+1') "--------------";
+      di _dup(`length') " " "`header'" "|   P Value";
+      di _dup(`length') "-" _dup(`=`subpop_count'+1') "+-------------";
+
+      forvalues i = 1/`varlistlength'
+      {;
+        local name = "``i''";
+        local dis_string = "";
+
+        local pop = 1;
+        forvalues j = 1/`subpop_count'
+        {;
+          local templabel : word `pop' of `n_over_labels_`i'';
+          if("`templabel'"=="`subpop_label_`j''")
+          {;
+            local tmp_string : di %11.6f results_`i'[1,`pop'];
+            local dis_string = "`dis_string' | `tmp_string'";
+
+            local pop = `pop' + 1;
+          };
+          else
+          {;
+            local tmp_string : di %11.6f 0.0;
+            local dis_string = "`dis_string' | `tmp_string'";
+          };
+
+          if(`j'==`subpop_count')
+          {;
+            local tmp_string : di %11.4f `pval_`i'';
+            local dis_string = "`dis_string' | `tmp_string'";
+          };
+        };
+
+        di in gr %-`=`length'-1's "`name'" "`dis_string'";
+      };
+
+      di _dup(`length') "-" _dup(`=`subpop_count'+1') "+-------------";
+
+
+
     };
 
-
-
 end;
+
 
