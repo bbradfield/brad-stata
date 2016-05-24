@@ -8,8 +8,8 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.8.0                                                **
-**   Date:         05/23/2016                                           **
+**   Version:      2.8.1                                                **
+**   Date:         05/24/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -65,10 +65,6 @@ syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
 
     forvalues i = 1/`varlistlength'
     {;
-      /* Observations */
-      qui count if !missing(``i'');
-      local obs_`i' = r(N);
-
       /* Mean Results */
       qui `opt_svy' mean ``i'' `opt_over';
 
@@ -139,7 +135,7 @@ syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
         local name = "``i''";
         di in gr %`=`length'-1's "`name'" " | " in ye %11.6f results_`i'[1,1] " | " in ye %11.6f results_`i'[2,1] " | "
                                                 in ye %11.6f results_`i'[5,1] " | " in ye %11.6f results_`i'[6,1] " | "
-                                                in ye %11.0fc `obs_`i'';
+                                                in ye %11.0fc subpop_`i'[1,1];
       };
 
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
@@ -228,9 +224,6 @@ syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
       };
 
       di _dup(`length') "-" _dup(`=`subpop_count'+1') "+-------------";
-
-
-
     };
 
 end;
