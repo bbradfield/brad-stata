@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 2.8.1  24may2016}{...}
+{* *! version 2.9.0  13jun2016}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "examplehelpfile##syntax"}{...}
 {viewerjumpto "Description" "examplehelpfile##description"}{...}
@@ -17,6 +17,7 @@
 {p 8 17 2}
 {cmdab:bradmean:}
 [{varlist}]
+{ifin}
 [{cmd:,} {it:options}]
 
 {synoptset 20 tabbed}{...}

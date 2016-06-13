@@ -8,15 +8,15 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.8.1                                                **
-**   Date:         05/24/2016                                           **
+**   Version:      2.9.0                                                **
+**   Date:         06/13/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
+syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
 
   /* Creating Varlist Macros */
 
@@ -51,7 +51,7 @@ syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
     if("`over'"!="")
     {;
       qui tempname freq code;
-      qui tab `over', matcell(`freq') matrow(`code');
+      qui tab `over' `if' `in', matcell(`freq') matrow(`code');
       local subpop_count = rowsof(`freq');
 
       forvalues i = 1/`subpop_count'
@@ -66,7 +66,7 @@ syntax varlist(numeric), [SVY OVER(varname numeric) WIDE];
     forvalues i = 1/`varlistlength'
     {;
       /* Mean Results */
-      qui `opt_svy' mean ``i'' `opt_over';
+      qui `opt_svy' mean ``i'' `if' `in' `opt_over';
 
       matrix results_`i' = r(table);
       matrix subpop_`i' = e(_N);
