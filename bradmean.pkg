@@ -2,9 +2,9 @@ d 'bradmean': module to compute multiple independent means in a single table
 d
 d   Computes multiple independent means in a single table
 d
-d Version 2.9.0
+d Version 2.9.1
 d
-d Distribution-Date: 13jun2016
+d Distribution-Date: 22jun2016
 d
 d Author: Brian Bradfield
 d Support: email bbradfield@rti.org

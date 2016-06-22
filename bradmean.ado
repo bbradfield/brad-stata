@@ -8,8 +8,8 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.9.0                                                **
-**   Date:         06/13/2016                                           **
+**   Version:      2.9.1                                                **
+**   Date:         06/22/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -26,7 +26,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     local length = 13;
     forvalues i = 1/`varlistlength'
     {;
-      if(length("``i''")>`length')
+      if(length("``i''")>=`length')
       {;
         local length = length("``i''") + 1;
       };
