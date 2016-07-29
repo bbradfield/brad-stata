@@ -2,7 +2,7 @@
 Stata packages developed by bbradfield
 
 ## Packages
-**bradmean** - Computes multiple independent means in a single table
+**bradmean** - Computes multiple independent means in a single table  
 **bradbook** - Creates a cleaner codebook for export to Word
 
 ## Install
