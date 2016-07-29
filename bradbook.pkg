@@ -1,0 +1,13 @@
+d 'bradbook': module to create a cleaner codebook to export to Word
+d
+d   Creates a cleaner codebook to export to Word
+d
+d Version 1.5.0
+d
+d Distribution-Date: 29jul2016
+d
+d Author: Brian Bradfield
+d Support: email bbradfield@rti.org
+d
+f bradbook.ado
+f bradbook.sthlp
