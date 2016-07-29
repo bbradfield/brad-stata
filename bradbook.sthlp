@@ -8,7 +8,7 @@
 {title:Title}
 
 {phang}
-{bf:bradbook} {hline 2} Creates a cleaner codebook to export to Word
+{bf:bradbook} {hline 2} Creates a cleaner codebook for export to Word
 
 
 {marker syntax}{...}
