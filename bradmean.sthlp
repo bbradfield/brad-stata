@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 2.9.1  22jun2016}{...}
+{* *! version 2.9.4  03aug2016}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "examplehelpfile##syntax"}{...}
 {viewerjumpto "Description" "examplehelpfile##description"}{...}

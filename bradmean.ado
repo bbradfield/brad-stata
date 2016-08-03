@@ -8,8 +8,8 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.9.1                                                **
-**   Date:         06/22/2016                                           **
+**   Version:      2.9.4                                                **
+**   Date:         08/03/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -53,6 +53,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
       qui tempname freq code;
       qui tab `over' `if' `in', matcell(`freq') matrow(`code');
       local subpop_count = rowsof(`freq');
+      di "subpop - `subpop_count'";
 
       forvalues i = 1/`subpop_count'
       {;
@@ -199,8 +200,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
         local pop = 1;
         forvalues j = 1/`subpop_count'
         {;
-          local templabel : word `pop' of `n_over_labels_`i'';
-          if("`templabel'"=="`subpop_label_`j''")
+          if(`j'==`pop')
           {;
             local tmp_string : di %11.6f results_`i'[1,`pop'];
             local dis_string = "`dis_string' | `tmp_string'";
