@@ -53,7 +53,6 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
       qui tempname freq code;
       qui tab `over' `if' `in', matcell(`freq') matrow(`code');
       local subpop_count = rowsof(`freq');
-      di "subpop - `subpop_count'";
 
       forvalues i = 1/`subpop_count'
       {;
