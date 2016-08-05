@@ -160,8 +160,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
         forvalues j = 1/`subpop_count'
         {;
           local poplabel = substr("_subpop_`j'",1,`=`length'-1');
-          local templabel : word `pop' of `n_over_labels_`i'';
-          if("`templabel'"=="`subpop_label_`j''")
+          if(`j'==`pop')
           {;
             di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.6f results_`i'[1,`pop'] " | " in ye %11.6f results_`i'[2,`pop'] " | "
                                                         in ye %11.6f results_`i'[5,`pop'] " | " in ye %11.6f results_`i'[6,`pop'] " | "
