@@ -1,10 +1,6 @@
 {smcl}
 {* *! version 1.5.0  29jul2016}{...}
 {vieweralsosee "[R] codebook" "help codebook"}{...}
-{viewerjumpto "Syntax" "examplehelpfile##syntax"}{...}
-{viewerjumpto "Description" "examplehelpfile##description"}{...}
-{viewerjumpto "Options" "examplehelpfile##options"}{...}
-{viewerjumpto "Examples" "examplehelpfile##examples"}{...}
 {title:Title}
 
 {phang}

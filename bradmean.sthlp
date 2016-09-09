@@ -1,10 +1,10 @@
 {smcl}
-{* *! version 2.9.4  03aug2016}{...}
+{* *! version 1.0.0  09sep2016}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
-{viewerjumpto "Syntax" "examplehelpfile##syntax"}{...}
-{viewerjumpto "Description" "examplehelpfile##description"}{...}
-{viewerjumpto "Options" "examplehelpfile##options"}{...}
-{viewerjumpto "Examples" "examplehelpfile##examples"}{...}
+{viewerjumpto "Syntax" "bradmean##syntax"}{...}
+{viewerjumpto "Description" "bradmean##description"}{...}
+{viewerjumpto "Options" "bradmean##options"}{...}
+{viewerjumpto "Examples" "bradmean##examples"}{...}
 {title:Title}
 
 {phang}
@@ -25,7 +25,8 @@
 {synoptline}
 {syntab:Main}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
-{synopt :{cmd:over(}{it:{help varname}}{cmd:)}}group over
+{synopt:{opt level(#):}}set confidence level; default is {bf:level(95)}{p_end}
+{synopt :{cmd:over(}{it:{help varlist}}{cmd:)}}group over
 subpopulations defined by {it:varname}{p_end}
 {synopt:{opt wide:}}displays in wide format{p_end}
 {synoptline}
@@ -50,7 +51,10 @@ which will also include an overall adjusted Wald test.
 {opt svy} specifies that statistics will be survey weighted.
 
 {phang}
-{opt over} specifies that estimates be computed for multiple subpopulations, which are identified by the different values of the variable {varname}.
+{opt level(#)}; see {helpb estimation options##level():[R] estimation options}.
+
+{phang}
+{opt over} specifies that estimates be computed for multiple subpopulations, which are identified by the different values of the variable(s) {varlist}.
 
 {phang}
 {opt wide} specifies that estimates will be output in a wide format (only in cases where {opt over} is specified).

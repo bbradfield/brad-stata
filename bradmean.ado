@@ -8,15 +8,15 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      2.9.4                                                **
-**   Date:         08/03/2016                                           **
+**   Version:      1.0.0                                                **
+**   Date:         09/09/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
+syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
 
   /* Creating Varlist Macros */
 
@@ -37,7 +37,11 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     local opt_over = "";
     if("`over'"!="")
     {;
-      local opt_over = ", over(`over')";
+      tempvar over_str;
+      egen `over_str' = concat(`over'), decode p(", ");
+      tempvar over_var;
+      encode `over_str', generate(`over_var');
+      local opt_over = " over(`over_var')";
     };
 
     local opt_svy = "";
@@ -51,13 +55,13 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     if("`over'"!="")
     {;
       qui tempname freq code;
-      qui tab `over' `if' `in', matcell(`freq') matrow(`code');
+      qui tab `over_var' `if' `in', matcell(`freq') matrow(`code');
       local subpop_count = rowsof(`freq');
 
       forvalues i = 1/`subpop_count'
       {;
         local ci = `code'[`i',1];
-        local subpop_label_`i' : label (`over') `ci';
+        local subpop_label_`i' : label (`over_var') `ci';
       };
     };
 
@@ -66,7 +70,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     forvalues i = 1/`varlistlength'
     {;
       /* Mean Results */
-      qui `opt_svy' mean ``i'' `if' `in' `opt_over';
+      qui `opt_svy' mean ``i'' `if' `in', level(`level') `opt_over';
 
       matrix results_`i' = r(table);
       matrix subpop_`i' = e(_N);
@@ -127,7 +131,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     {;
       di;
       di _dup(`length') "-" "----------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | 95% LowerCI | 95% UpperCI |        Obs.";
+      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |        Obs.";
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
 
       forvalues i = 1/`varlistlength'
@@ -147,7 +151,7 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     {;
       di;
       di _dup(`length') "-" "------------------------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | 95% LowerCI | 95% UpperCI |   P Value   |        Obs.";
+      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |   P Value   |        Obs.";
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
 
       forvalues i = 1/`varlistlength'
@@ -225,5 +229,3 @@ syntax varlist(numeric) [if] [in], [SVY OVER(varname numeric) WIDE];
     };
 
 end;
-
-
