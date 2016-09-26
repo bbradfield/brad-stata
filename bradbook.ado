@@ -7,15 +7,15 @@ set linesize 255;
 **   Program:      bradbook.ado                                         **
 **   Purpose:      Outputting a better formatted codebook               **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.4.2                                                **
-**   Date:         07/29/2016                                           **
+**   Version:      1.0.0                                                **
+**   Date:         09/26/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradbook;
 program define bradbook, rclass;
-syntax [varlist];
+syntax [varlist], [EXPort(string) REPLACE];
 
   *------------------------------------------------------------*
   *   01. Counting Number of Variables                         *
@@ -71,7 +71,26 @@ syntax [varlist];
     qui generate `sortorder' = _n;
 
   *------------------------------------------------------------*
-  *   04. Displaying Header                                    *
+  *   04. Beginning Export File                                *
+  *------------------------------------------------------------*;
+
+    local export_valid = 0;
+
+    if("`export'"!="")
+    {;
+      cap qui log using "`export'.smcl", replace;
+      if(_rc!=0)
+      {;
+        di "ERROR! File cannot be created!";
+      };
+      else
+      {;
+        local export_valid = 1;
+      };
+    };
+
+  *------------------------------------------------------------*
+  *   05. Displaying Header                                    *
   *------------------------------------------------------------*;
 
     if(`varlistlength'==`vartotal')
@@ -87,7 +106,7 @@ syntax [varlist];
     };
 
   *------------------------------------------------------------*
-  *   05. Displaying Individual Variables                      *
+  *   06. Displaying Individual Variables                      *
   *------------------------------------------------------------*;
 
     foreach var of varlist `varlist'
@@ -318,6 +337,31 @@ syntax [varlist];
       *--------------------------------------------------------*;
 
         dis "+------------------------------------------------------------------------------------+";
+    };
+
+  *------------------------------------------------------------*
+  *   07. Closing Export File                                  *
+  *------------------------------------------------------------*;
+
+    if(`export_valid'==1)
+    {;
+      qui log close;
+      di "`replace'";
+
+      if("`replace'"=="")
+      {;
+        cap qui translate "`export'.smcl" "`export'.pdf";
+        if(_rc!=0)
+        {;
+          di "ERROR! File already exists!";
+        };
+      };
+      else
+      {;
+        cap qui translate "`export'.smcl" "`export'.pdf", replace;
+      };
+
+      qui erase "`export'.smcl";
     };
 
 end;
