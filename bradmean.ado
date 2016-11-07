@@ -254,7 +254,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
     {;
       di;
       di _dup(`length') "-" "------------------------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |   P Value   |        Obs.";
+      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |   P Value   | Subpop Obs.";
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
 
       forvalues i = 1/`varlistlength'
