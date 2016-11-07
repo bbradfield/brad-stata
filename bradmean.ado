@@ -8,8 +8,8 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.1.4                                                **
-**   Date:         09/23/2016                                           **
+**   Version:      1.1.5                                                **
+**   Date:         11/07/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -130,6 +130,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
         matrix results = r(table);
         matrix subpop = e(_N);
 
+        local pop_`i' = e(N);
         local n_over = e(N_over);
         local n_over_names = e(over_namelist);
         local n_over_labels = e(over_labels);
@@ -159,7 +160,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
       /* Creating Results Matrix */
 
         ** Note: Set matrix to 6 rows for - b, se, ll, ul, pval, obs **;
-        matrix output_`i' = J(6,`subpop_count',.);
+        matrix output_`i' = J(7,`subpop_count',.);
 
         /* No Over */
 
@@ -279,9 +280,9 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
     if("`over'"!="" & "`wide'"!="")
     {;
       di;
-      di _dup(`length') "-" _dup(`=`subpop_count'+1') "--------------";
-      di _dup(`length') " " "`header'" "|   P Value";
-      di _dup(`length') "-" _dup(`=`subpop_count'+1') "+-------------";
+      di _dup(`length') "-" _dup(`=`subpop_count'+2') "--------------";
+      di _dup(`length') " " "`header'" "|   P Value   |        Obs.";
+      di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
 
       forvalues i = 1/`varlistlength'
       {;
@@ -298,13 +299,16 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
           {;
             local tmp_string : di %11.4f `pval_`i'';
             local dis_string = "`dis_string' | `tmp_string'";
+
+            local tmp_string : di %11.0fc `pop_`i'';
+            local dis_string = "`dis_string' | `tmp_string'";
           };
         };
 
         di in gr %-`=`length'-1's "`name'" "`dis_string'";
       };
 
-      di _dup(`length') "-" _dup(`=`subpop_count'+1') "+-------------";
+      di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
     };
 
 end;
