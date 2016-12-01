@@ -117,11 +117,6 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
       local subpop_count = 1;
     };
 
-    if(`subpop_count' == 1)
-    {;
-      local over = "";
-    };
-
   /* Creating Values to be Returned */
 
     forvalues i = 1/`varlistlength'
