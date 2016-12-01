@@ -8,8 +8,8 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.1.5                                                **
-**   Date:         11/07/2016                                           **
+**   Version:      1.1.6                                                **
+**   Date:         12/01/2016                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -115,6 +115,11 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) WIDE];
     else
     {;
       local subpop_count = 1;
+    };
+
+    if(`subpop_count' == 1)
+    {;
+      local over = "";
     };
 
   /* Creating Values to be Returned */
