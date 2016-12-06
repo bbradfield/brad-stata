@@ -371,9 +371,9 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
 
       forvalues i = 1/`varlistlength'
       {;
-        di in gr %`=`length'-1's "``i''" " | " in ye %11.7f  output_`i'[1,1] " | " in ye %11.7f output_`i'[2,1] " | "
-                                               in ye %11.7f  output_`i'[3,1] " | " in ye %11.7f output_`i'[4,1] " | "
-                                               in ye %11.0fc output_`i'[6,1];
+        di in gr %`=`length'-1's "``i''" " | " in ye %11.7g  output_`i'[1,1] " | " in ye %11.7g output_`i'[2,1] " | "
+                                               in ye %11.7g  output_`i'[3,1] " | " in ye %11.7g output_`i'[4,1] " | "
+                                               in ye %11.0gc output_`i'[6,1];
       };
 
       di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
@@ -395,9 +395,9 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
         forvalues sub_num = 1/`subpop_count'
         {;
           local poplabel = substr("_subpop_`sub_num'",1,`=`length'-1');
-          di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7f output_`i'[1,`sub_num'] " | " in ye %11.7f  output_`i'[2,`sub_num'] " | "
-                                                      in ye %11.7f output_`i'[3,`sub_num'] " | " in ye %11.7f  output_`i'[4,`sub_num'] " | "
-                                                      in ye %11.4f output_`i'[5,`sub_num'] " | " in ye %11.0fc output_`i'[6,`sub_num'];
+          di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7g output_`i'[1,`sub_num'] " | " in ye %11.7g  output_`i'[2,`sub_num'] " | "
+                                                      in ye %11.7g output_`i'[3,`sub_num'] " | " in ye %11.7g  output_`i'[4,`sub_num'] " | "
+                                                      in ye %11.4f output_`i'[5,`sub_num'] " | " in ye %11.0gc output_`i'[6,`sub_num'];
         };
 
         di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
@@ -421,7 +421,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
         ** Note: Concatenates a string to display all the means and finally the pvalue **;
         forvalues sub_num = 1/`subpop_count'
         {;
-          local tmp_string : di %11.7f output_`i'[1,`sub_num'];
+          local tmp_string : di %11.7g output_`i'[1,`sub_num'];
           local dis_string = "`dis_string' | `tmp_string'";
 
           if(`sub_num'==`subpop_count')
@@ -429,7 +429,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
             local tmp_string : di %11.4f output_`i'[5,1];
             local dis_string = "`dis_string' | `tmp_string'";
 
-            local tmp_string : di %11.0fc output_`i'[7,1];
+            local tmp_string : di %11.0gc output_`i'[7,1];
             local dis_string = "`dis_string' | `tmp_string'";
           };
         };
@@ -464,9 +464,9 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
           forvalues sub_num = 1/`subpop_count'
           {;
             local poplabel = substr("_subpop_`sub_num'",1,`=`length'-1');
-            di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7f output_`i'[1,`=`sub_num'+`col_addition''] " | " in ye %11.7f  output_`i'[2,`=`sub_num'+`col_addition''] " | "
-                                                        in ye %11.7f output_`i'[3,`=`sub_num'+`col_addition''] " | " in ye %11.7f  output_`i'[4,`=`sub_num'+`col_addition''] " | "
-                                                        in ye %11.4f output_`i'[5,`=`sub_num'+`col_addition''] " | " in ye %11.0fc output_`i'[6,`=`sub_num'+`col_addition''];
+            di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7g output_`i'[1,`=`sub_num'+`col_addition''] " | " in ye %11.7g  output_`i'[2,`=`sub_num'+`col_addition''] " | "
+                                                        in ye %11.7g output_`i'[3,`=`sub_num'+`col_addition''] " | " in ye %11.7g  output_`i'[4,`=`sub_num'+`col_addition''] " | "
+                                                        in ye %11.4f output_`i'[5,`=`sub_num'+`col_addition''] " | " in ye %11.0gc output_`i'[6,`=`sub_num'+`col_addition''];
           };
         };
 
@@ -496,7 +496,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
 
           forvalues sub_num = 1/`subpop_count'
           {;
-            local tmp_string : di %11.7f output_`i'[1,`=`sub_num'+`col_addition''];
+            local tmp_string : di %11.7g output_`i'[1,`=`sub_num'+`col_addition''];
             local dis_string = "`dis_string' | `tmp_string'";
 
             if(`sub_num'==`subpop_count')
@@ -504,7 +504,7 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
               local tmp_string : di %11.4f output_`i'[5,`=`sub_num'+`col_addition''];
               local dis_string = "`dis_string' | `tmp_string'";
 
-              local tmp_string : di %11.0fc output_`i'[7,`=`sub_num'+`col_addition''];
+              local tmp_string : di %11.0gc output_`i'[7,`=`sub_num'+`col_addition''];
               local dis_string = "`dis_string' | `tmp_string'";
             };
           };
