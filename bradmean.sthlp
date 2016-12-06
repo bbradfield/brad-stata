@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.1.5  07nov2016}{...}
+{* *! version 1.2.1  06dec2016}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -26,8 +26,8 @@
 {syntab:Main}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
 {synopt:{opt level(#):}}set confidence level; default is {bf:level(95)}{p_end}
-{synopt :{cmd:over(}{it:{help varlist}}{cmd:)}}group over
-subpopulations defined by {it:varname}{p_end}
+{synopt:{cmd:by(}{it:{help varname}}{cmd:)}}run means for each value of {it:varname}{p_end}
+{synopt:{cmd:over(}{it:{help varlist}}{cmd:)}}group over subpopulations defined by {it:varlist}{p_end}
 {synopt:{opt wide:}}displays in wide format{p_end}
 {synoptline}
 {p2colreset}{...}
@@ -54,6 +54,9 @@ which will also include an overall adjusted Wald test.
 {opt level(#)}; see {helpb estimation options##level():[R] estimation options}.
 
 {phang}
+{opt by} specifies that estimates be computed for each individual value of the variable {varname}.
+
+{phang}
 {opt over} specifies that estimates be computed for multiple subpopulations, which are identified by the different values of the variable(s) {varlist}.
 
 {phang}
@@ -68,4 +71,6 @@ which will also include an overall adjusted Wald test.
 
 {phang}{cmd:. bradmean mpg, svy over(foreign)}{p_end}
 
-{phang}{cmd:. bradmean mpg, svy over(foreign) wide}{p_end}
+{phang}{cmd:. bradmean mpg, svy by(make) over(foreign)}{p_end}
+
+{phang}{cmd:. bradmean mpg, svy by(make) over(foreign) wide}{p_end}
