@@ -8,18 +8,18 @@ set linesize 255;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.2.1                                                **
-**   Date:         12/06/2016                                           **
+**   Version:      1.2.3                                                **
+**   Date:         02/06/2017                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
 capture program drop bradmean;
 program define bradmean, rclass;
-syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname) WIDE];
+syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) PCT ROUND(integer 7) OVER(varlist) BY(varname) WIDE];
 
 *--------------------------------------------------------------*
-*   01. Preparing Commmand Varlist                             *
+*   01. Preparing Command Varlist                              *
 *--------------------------------------------------------------*;
 
   local varlistlength : list sizeof varlist;
@@ -121,6 +121,31 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
       local opt_over = " over(`over_var')";
     };
 
+  /* Setting `pct' */
+
+    local opt_pct = 1;
+    if("`pct'"!="")
+    {;
+      local opt_pct = 100;
+    };
+
+  /* Setting `round' */
+
+    local opt_round = `round';
+    if(!inrange(`round',0,7))
+    {;
+      local opt_round = 7;
+    };
+
+    if(`opt_round'==0)
+    {;
+      local opt_round = 1;
+    };
+    else
+    {;
+      local opt_round = 1/(10^`opt_round');
+    };
+
 *--------------------------------------------------------------*
 *   03a. Finding Unique Values of `over'                       *
 *--------------------------------------------------------------*;
@@ -188,8 +213,8 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
 
     forvalues i = 1/`varlistlength'
     {;
-      matrix output_`i' = J(7,`col_count',.);
-      matrix rownames output_`i' = b se lci uci pval subpop obs;
+      matrix output_`i' = J(8,`col_count',.);
+      matrix rownames output_`i' = b se sd lci uci pval subpop obs;
       if("`over'"!="")
       {;
         matrix colnames output_`i' = `matrix_colnames';
@@ -231,6 +256,10 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
         matrix results = r(table);
         matrix subpop = e(_N);
 
+        qui estat sd;
+
+        matrix sd = r(sd);
+
         local pop = e(N);
         local pval = .;
         local n_over = e(N_over);
@@ -265,13 +294,14 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
 
           if("`over'"=="")
           {;
-            matrix output_`i'[1,1] = results[1,1];
-            matrix output_`i'[2,1] = results[2,1];
-            matrix output_`i'[3,1] = results[5,1];
-            matrix output_`i'[4,1] = results[6,1];
-            matrix output_`i'[5,1] = `pval';
-            matrix output_`i'[6,1] = subpop[1,1];
-            matrix output_`i'[7,1] = `pop';
+            matrix output_`i'[1,1] = round(results[1,1]*`opt_pct',`opt_round');
+            matrix output_`i'[2,1] = round(results[2,1]*`opt_pct',`opt_round');
+            matrix output_`i'[3,1] = round(sd[1,1]     *`opt_pct',`opt_round');
+            matrix output_`i'[4,1] = round(results[5,1]*`opt_pct',`opt_round');
+            matrix output_`i'[5,1] = round(results[6,1]*`opt_pct',`opt_round');
+            matrix output_`i'[6,1] = `pval';
+            matrix output_`i'[7,1] = subpop[1,1];
+            matrix output_`i'[8,1] = `pop';
           };
 
         /* Over */
@@ -288,13 +318,14 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
               {;
                 if("``j''"=="`subpop_label_`k''")
                 {;
-                  matrix output_`i'[1,`=`k'+`col_addition''] = results[1,`j'];
-                  matrix output_`i'[2,`=`k'+`col_addition''] = results[2,`j'];
-                  matrix output_`i'[3,`=`k'+`col_addition''] = results[5,`j'];
-                  matrix output_`i'[4,`=`k'+`col_addition''] = results[6,`j'];
-                  matrix output_`i'[5,`=`k'+`col_addition''] = `pval';
-                  matrix output_`i'[6,`=`k'+`col_addition''] = subpop[1,`j'];
-                  matrix output_`i'[7,`=`k'+`col_addition''] = `pop';
+                  matrix output_`i'[1,`=`k'+`col_addition''] = round(results[1,`j']*`opt_pct',`opt_round');
+                  matrix output_`i'[2,`=`k'+`col_addition''] = round(results[2,`j']*`opt_pct',`opt_round');
+                  matrix output_`i'[3,`=`k'+`col_addition''] = round(sd[1,`j']     *`opt_pct',`opt_round');
+                  matrix output_`i'[4,`=`k'+`col_addition''] = round(results[5,`j']*`opt_pct',`opt_round');
+                  matrix output_`i'[5,`=`k'+`col_addition''] = round(results[6,`j']*`opt_pct',`opt_round');
+                  matrix output_`i'[6,`=`k'+`col_addition''] = `pval';
+                  matrix output_`i'[7,`=`k'+`col_addition''] = subpop[1,`j'];
+                  matrix output_`i'[8,`=`k'+`col_addition''] = `pop';
                 };
               };
             };
@@ -355,166 +386,182 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
     };
 
 *--------------------------------------------------------------*
-*   07. Outputting Results                                     *
+*   07a. Outputting Results (No Over)                          *
 *--------------------------------------------------------------*;
 
   tokenize `varlist';
 
-  /* No Over */
+  if("`over'"=="")
+  {;
+    di;
+    di _dup(`length') "-" "------------------------------------------------------------------------------------";
+    di _dup(`length') " " "|        Mean |   Std. Err. |   Std. Dev. | `level'% LowerCI | `level'% UpperCI |        Obs.";
+    di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
 
-    if("`over'"=="")
+    forvalues i = 1/`varlistlength'
     {;
-      di;
-      di _dup(`length') "-" "----------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |        Obs.";
-      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
-
-      forvalues i = 1/`varlistlength'
-      {;
-        di in gr %`=`length'-1's "``i''" " | " in ye %11.7g  output_`i'[1,1] " | " in ye %11.7g output_`i'[2,1] " | "
-                                               in ye %11.7g  output_`i'[3,1] " | " in ye %11.7g output_`i'[4,1] " | "
-                                               in ye %11.0gc output_`i'[6,1];
-      };
-
-      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------";
+      di in gr %`=`length'-1's "``i''" " | " in ye %11.7g output_`i'[1,1] " | " in ye %11.7g  output_`i'[2,1] " | "
+                                             in ye %11.7g output_`i'[3,1] " | " in ye %11.7g  output_`i'[4,1] " | "
+                                             in ye %11.7g output_`i'[5,1] " | " in ye %11.0gc output_`i'[8,1];
     };
 
-  /* Over, No By, Long */
+    di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
+  };
 
-    if("`over'"!="" & "`by'"=="" & "`wide'"=="")
+*--------------------------------------------------------------*
+*   07b. Outputting Results (Over, No By, Long)                *
+*--------------------------------------------------------------*;
+
+  tokenize `varlist';
+
+  if("`over'"!="" & "`by'"=="" & "`wide'"=="")
+  {;
+    di;
+    di _dup(`length') "-" "--------------------------------------------------------------------------------------------------";
+    di _dup(`length') " " "|        Mean |   Std. Err. |   Std. Dev. | `level'% LowerCI | `level'% UpperCI |   P Value   | Subpop Obs.";
+    di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------+-------------";
+
+    forvalues i = 1/`varlistlength'
     {;
-      di;
-      di _dup(`length') "-" "------------------------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |   P Value   | Subpop Obs.";
-      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
+      di in gr %-`=`length'-1's "``i''" " |             |             |             |             |             |             |";
 
-      forvalues i = 1/`varlistlength'
+      forvalues sub_num = 1/`subpop_count'
       {;
-        di in gr %-`=`length'-1's "``i''" " |             |             |             |             |             |";
+        local poplabel = substr("_subpop_`sub_num'",1,`=`length'-1');
+        di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7g  output_`i'[1,`sub_num'] " | " in ye %11.7g output_`i'[2,`sub_num'] " | "
+                                                    in ye %11.7g  output_`i'[3,`sub_num'] " | " in ye %11.7g output_`i'[4,`sub_num'] " | "
+                                                    in ye %11.7g  output_`i'[5,`sub_num'] " | " in ye %11.4f output_`i'[6,`sub_num'] " | "
+                                                    in ye %11.0gc output_`i'[7,`sub_num'];
+      };
+
+      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------+-------------";
+    };
+  };
+
+*--------------------------------------------------------------*
+*   07c. Outputting Results (Over, No By, Wide)                *
+*--------------------------------------------------------------*;
+
+  tokenize `varlist';
+
+  if("`over'"!="" & "`by'"=="" & "`wide'"!="")
+  {;
+    di;
+    di _dup(`length') "-" _dup(`=`subpop_count'+2') "--------------";
+    di _dup(`length') " " "`header'" "|   P Value   |        Obs.";
+    di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
+
+    forvalues i = 1/`varlistlength'
+    {;
+      local name = "``i''";
+      local dis_string = "";
+
+      ** Note: Concatenates a string to display all the means and finally the pvalue **;
+      forvalues sub_num = 1/`subpop_count'
+      {;
+        local tmp_string : di %11.7g output_`i'[1,`sub_num'];
+        local dis_string = "`dis_string' | `tmp_string'";
+
+        if(`sub_num'==`subpop_count')
+        {;
+          local tmp_string : di %11.4f output_`i'[6,1];
+          local dis_string = "`dis_string' | `tmp_string'";
+
+          local tmp_string : di %11.0gc output_`i'[8,1];
+          local dis_string = "`dis_string' | `tmp_string'";
+        };
+      };
+
+      di in gr %-`=`length'-1's "`name'" "`dis_string'";
+    };
+
+    di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
+  };
+
+*--------------------------------------------------------------*
+*   07d. Outputting Results (Over, By, Long)                   *
+*--------------------------------------------------------------*;
+
+  tokenize `varlist';
+
+  if("`over'"!="" & "`by'"!="" & "`wide'"=="")
+  {;
+    di;
+    di _dup(`length') "-" "--------------------------------------------------------------------------------------------------";
+    di _dup(`length') " " "|        Mean |   Std. Err. |   Std. Dev. | `level'% LowerCI | `level'% UpperCI |   P Value   | Subpop Obs.";
+    di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------+-------------";
+
+    forvalues i = 1/`varlistlength'
+    {;
+      di in gr %-`=`length'-1's "``i''" " |             |             |             |             |             |             |";
+
+      forvalues by_num = 1/`by_count'
+      {;
+        local col_addition = (`by_num'-1)*`subpop_count';
+        local by_value = el(by_code,`by_num',1);
+        local by_label = substr("if `by'=`by_value'",1,`=`length'-1');
+
+        di in gr %`=`length'-1's "`by_label'" " |             |             |             |             |             |             |";
 
         forvalues sub_num = 1/`subpop_count'
         {;
           local poplabel = substr("_subpop_`sub_num'",1,`=`length'-1');
-          di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7g output_`i'[1,`sub_num'] " | " in ye %11.7g  output_`i'[2,`sub_num'] " | "
-                                                      in ye %11.7g output_`i'[3,`sub_num'] " | " in ye %11.7g  output_`i'[4,`sub_num'] " | "
-                                                      in ye %11.4f output_`i'[5,`sub_num'] " | " in ye %11.0gc output_`i'[6,`sub_num'];
+          di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7g  output_`i'[1,`=`sub_num'+`col_addition''] " | " in ye %11.7g output_`i'[2,`=`sub_num'+`col_addition''] " | "
+                                                      in ye %11.7g  output_`i'[3,`=`sub_num'+`col_addition''] " | " in ye %11.7g output_`i'[4,`=`sub_num'+`col_addition''] " | "
+                                                      in ye %11.7g  output_`i'[5,`=`sub_num'+`col_addition''] " | " in ye %11.4f output_`i'[6,`=`sub_num'+`col_addition''] " | "
+                                                      in ye %11.0gc output_`i'[7,`=`sub_num'+`col_addition''];
         };
-
-        di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
       };
+
+      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------+-------------";
     };
+  };
 
-  /* Over, No By, Wide */
+*--------------------------------------------------------------*
+*   07e. Outputting Results (Over, By, Wide)                   *
+*--------------------------------------------------------------*;
 
-    if("`over'"!="" & "`by'"=="" & "`wide'"!="")
+  tokenize `varlist';
+
+  if("`over'"!="" & "`by'"!="" & "`wide'"!="")
+  {;
+    di;
+    di _dup(`length') "-" _dup(`=`subpop_count'+2') "--------------";
+    di _dup(`length') " " "`header'" "|   P Value   |        Obs.";
+    di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
+
+    forvalues i = 1/`varlistlength'
     {;
-      di;
-      di _dup(`length') "-" _dup(`=`subpop_count'+2') "--------------";
-      di _dup(`length') " " "`header'" "|   P Value   |        Obs.";
-      di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
+      di in gr %-`=`length'-1's "``i''"  _dup(`=`subpop_count'+2') " |            ";
 
-      forvalues i = 1/`varlistlength'
+      forvalues by_num = 1/`by_count'
       {;
-        local name = "``i''";
+        local col_addition = (`by_num'-1)*`subpop_count';
+        local by_value = el(by_code,`by_num',1);
+        local by_label = substr("if `by'=`by_value'",1,`=`length'-1');
         local dis_string = "";
 
-        ** Note: Concatenates a string to display all the means and finally the pvalue **;
         forvalues sub_num = 1/`subpop_count'
         {;
-          local tmp_string : di %11.7g output_`i'[1,`sub_num'];
+          local tmp_string : di %11.7g output_`i'[1,`=`sub_num'+`col_addition''];
           local dis_string = "`dis_string' | `tmp_string'";
 
           if(`sub_num'==`subpop_count')
           {;
-            local tmp_string : di %11.4f output_`i'[5,1];
+            local tmp_string : di %11.4f output_`i'[6,`=`sub_num'+`col_addition''];
             local dis_string = "`dis_string' | `tmp_string'";
 
-            local tmp_string : di %11.0gc output_`i'[7,1];
+            local tmp_string : di %11.0gc output_`i'[8,`=`sub_num'+`col_addition''];
             local dis_string = "`dis_string' | `tmp_string'";
           };
         };
 
-        di in gr %-`=`length'-1's "`name'" "`dis_string'";
+        di in gr %`=`length'-1's "`by_label'" "`dis_string'";
       };
 
       di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
     };
-
-  /* Over, By, Long */
-
-    if("`over'"!="" & "`by'"!="" & "`wide'"=="")
-    {;
-      di;
-      di _dup(`length') "-" "------------------------------------------------------------------------------------";
-      di _dup(`length') " " "|        Mean |   Std. Err. | `level'% LowerCI | `level'% UpperCI |   P Value   | Subpop Obs.";
-      di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
-
-      forvalues i = 1/`varlistlength'
-      {;
-        di in gr %-`=`length'-1's "``i''" " |             |             |             |             |             |";
-
-        forvalues by_num = 1/`by_count'
-        {;
-          local col_addition = (`by_num'-1)*`subpop_count';
-          local by_value = el(by_code,`by_num',1);
-          local by_label = substr("if `by'=`by_value'",1,`=`length'-1');
-
-          di in gr %`=`length'-1's "`by_label'" " |             |             |             |             |             |";
-
-          forvalues sub_num = 1/`subpop_count'
-          {;
-            local poplabel = substr("_subpop_`sub_num'",1,`=`length'-1');
-            di in gr %`=`length'-1's "`poplabel'" " | " in ye %11.7g output_`i'[1,`=`sub_num'+`col_addition''] " | " in ye %11.7g  output_`i'[2,`=`sub_num'+`col_addition''] " | "
-                                                        in ye %11.7g output_`i'[3,`=`sub_num'+`col_addition''] " | " in ye %11.7g  output_`i'[4,`=`sub_num'+`col_addition''] " | "
-                                                        in ye %11.4f output_`i'[5,`=`sub_num'+`col_addition''] " | " in ye %11.0gc output_`i'[6,`=`sub_num'+`col_addition''];
-          };
-        };
-
-        di _dup(`length') "-" "+-------------+-------------+-------------+-------------+-------------+-------------";
-      };
-    };
-
-  /* Over, By, Wide */
-
-    if("`over'"!="" & "`by'"!="" & "`wide'"!="")
-    {;
-      di;
-      di _dup(`length') "-" _dup(`=`subpop_count'+2') "--------------";
-      di _dup(`length') " " "`header'" "|   P Value   |        Obs.";
-      di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
-
-      forvalues i = 1/`varlistlength'
-      {;
-        di in gr %-`=`length'-1's "``i''"  _dup(`=`subpop_count'+2') " |            ";
-
-        forvalues by_num = 1/`by_count'
-        {;
-          local col_addition = (`by_num'-1)*`subpop_count';
-          local by_value = el(by_code,`by_num',1);
-          local by_label = substr("if `by'=`by_value'",1,`=`length'-1');
-          local dis_string = "";
-
-          forvalues sub_num = 1/`subpop_count'
-          {;
-            local tmp_string : di %11.7g output_`i'[1,`=`sub_num'+`col_addition''];
-            local dis_string = "`dis_string' | `tmp_string'";
-
-            if(`sub_num'==`subpop_count')
-            {;
-              local tmp_string : di %11.4f output_`i'[5,`=`sub_num'+`col_addition''];
-              local dis_string = "`dis_string' | `tmp_string'";
-
-              local tmp_string : di %11.0gc output_`i'[7,`=`sub_num'+`col_addition''];
-              local dis_string = "`dis_string' | `tmp_string'";
-            };
-          };
-
-          di in gr %`=`length'-1's "`by_label'" "`dis_string'";
-        };
-
-        di _dup(`length') "-" _dup(`=`subpop_count'+2') "+-------------";
-      };
-    };
+  };
 
 *--------------------------------------------------------------*
 *   08. Returning Matrices                                     *
@@ -526,6 +573,19 @@ syntax varlist(numeric) [if] [in], [SVY LEVEL(cilevel) OVER(varlist) BY(varname)
     local var_name = "``i''";
     return matrix `var_name' = output_`i';
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 end;

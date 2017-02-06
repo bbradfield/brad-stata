@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.2.1  06dec2016}{...}
+{* *! version 1.2.3  06jan2017}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -26,6 +26,8 @@
 {syntab:Main}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
 {synopt:{opt level(#):}}set confidence level; default is {bf:level(95)}{p_end}
+{synopt:{opt pct:}}displays results as percentage (multiplied by 100){p_end}
+{synopt:{opt round(#):}}rounds to # decimal places; range 0-7{p_end}
 {synopt:{cmd:by(}{it:{help varname}}{cmd:)}}run means for each value of {it:varname}{p_end}
 {synopt:{cmd:over(}{it:{help varlist}}{cmd:)}}group over subpopulations defined by {it:varlist}{p_end}
 {synopt:{opt wide:}}displays in wide format{p_end}
@@ -51,7 +53,13 @@ which will also include an overall adjusted Wald test.
 {opt svy} specifies that statistics will be survey weighted.
 
 {phang}
-{opt level(#)}; see {helpb estimation options##level():[R] estimation options}.
+{opt level(#)} see {helpb estimation options##level():[R] estimation options}.
+
+{phang}
+{opt pct} specifies that statistics will be displayed as percentage (multiplied by 100).
+
+{phang}
+{opt round(#)} rounds statistics to # decimal places (range 0-7).
 
 {phang}
 {opt by} specifies that estimates be computed for each individual value of the variable {varname}.
