@@ -108,3 +108,11 @@ default for {bf:wide} is {cmd:disopt(mean)}
 {phang}{cmd:. bradmean mpg, svy subpop(make) over(foreign)}{p_end}
 
 {phang}{cmd:. bradmean mpg, svy subpop(make0 over(foreign) wide}{p_end}
+
+{marker results}{...}
+{title:Stored results}
+
+{synoptset 20 tabbed}{...}
+{p2col 5 20 24 2: Matrices}{p_end}
+{synopt:{cmd:r(results)}}matrix of stored estimates{p_end}
+
