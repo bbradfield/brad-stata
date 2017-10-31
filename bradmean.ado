@@ -4,8 +4,8 @@
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.3.0                                                **
-**   Date:         10/30/2017                                           **
+**   Version:      1.3.1                                                **
+**   Date:         10/31/2017                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -209,9 +209,14 @@ syntax varlist(numeric) [if] [in], [SVY /* svy */
 
   if("`subpop'" != "")
   {;
-    qui levelsof `subpop' if !missing(`svy_var'), local(subpop_lvls);
-
-    local sub_count : word count `subpop_lvls';
+    if("`if'" == "")
+    {;
+      qui levelsof `subpop' if !missing(`svy_var'), local(subpop_lvls);
+    };
+    else
+    {;
+      qui levelsof `subpop' `if' & !missing(`svy_var'), local(subpop_lvls);
+    };
 
     /* If only 1 level, remove the subpop option */
 
