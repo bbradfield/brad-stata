@@ -218,6 +218,8 @@ syntax varlist(numeric) [if] [in], [SVY /* svy */
       qui levelsof `subpop' `if' & !missing(`svy_var'), local(subpop_lvls);
     };
 
+    local sub_count : word count `subpop_lvls';
+
     /* If only 1 level, remove the subpop option */
 
       if(`sub_count' == 1)
