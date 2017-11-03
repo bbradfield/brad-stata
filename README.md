@@ -2,8 +2,8 @@
 Stata packages developed by bbradfield
 
 ## Packages
-**bradsuite** - Installs all the following brad commands at once
-**bradbook** - Creates a cleaner codebook for export to Word
+**bradsuite** - Installs all the following brad commands at once  
+**bradbook** - Creates a cleaner codebook for export to Word  
 **bradmean** - Computes multiple independent means in a single table  
 
 ## Install
