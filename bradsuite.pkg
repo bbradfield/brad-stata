@@ -1,0 +1,14 @@
+d 'bradsuite': the suite of brad ado commands
+d
+d   bradbook
+d   bradmean
+d
+d Distribution-Date: 03nov2017
+d
+d Author: Brian Bradfield
+d Support: email bbradfield@rti.org
+d
+f bradbook.ado
+f bradbook.sthlp
+f bradmean.ado
+f bradmean.sthlp
