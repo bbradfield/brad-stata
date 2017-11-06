@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.3.1  31oct2017}{...}
+{* *! version 1.3.2  06nov2017}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -75,10 +75,12 @@
 {phang}
 {cmd:disopt(}{it:{help (strings:string}}{cmd:)} specifies which statistics will be display and in what order. Available statistics:
 
+{space 12}{opt _all} {space 4} all statistics below
 {space 12}{opt obs} {space 5} observations (n)
 {space 12}{opt mean} {space 4} mean (b)
 {space 12}{opt se} {space 6} standard error (se)
 {space 12}{opt sd} {space 6} standard deviation (sd)
+{space 12}{opt var} {space 5} variance (var)
 {space 12}{opt ci} {space 6} confidence interval (lci-uci)
 
 {pmore}
