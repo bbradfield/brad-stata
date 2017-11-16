@@ -4,8 +4,8 @@
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.3.2                                                **
-**   Date:         11/06/2017                                           **
+**   Version:      1.3.3                                                **
+**   Date:         11/16/2017                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -875,7 +875,7 @@ syntax varlist(numeric) [if] [in], [SVY /* svy */
 
         forvalues i = 1/`sub_count'
         {;
-          di %-`length's "_sub_`i'" " | `subpop' = " `""`: label (`subpop') `i''""';
+          di %-`length's "_sub_`i'" " | `subpop' = " `""`: label (`subpop') `: word `i' of `subpop_lvls'''""';
         };
       };
 
