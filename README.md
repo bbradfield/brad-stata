@@ -1,5 +1,5 @@
 # brad-stata
-Stata packages developed by bbradfield
+Stata packages developed by bbradfield for Stata14+
 
 ## Packages
 **bradsuite** - Installs all the following brad commands at once  
@@ -7,9 +7,19 @@ Stata packages developed by bbradfield
 **bradmean** - Computes multiple independent means in a single table  
 
 ## Install
-To install in Stata14+, copy and paste the following code:
+To install from Github, copy and paste the following code:
 ```
 . net install <package>, from(https://raw.github.com/bbradfield/brad-stata/master/) replace
+```
+To install manually, download the .ado and .sthlp files and place them in the following directory:
+```
+~/ado/plus/b/ 
+```
+To update when connected to the internet, use:
+```
+adoupdate <package>, update
+OR
+adoupdate, update
 ```
 
 ## On Naming
