@@ -227,16 +227,16 @@ version 13.0
 
       qui summ `varlist';
 
-      local min : dis %9.2f r(min);
+      local min : dis %9.2g r(min);
       local min = trim("`min'");
 
-      local max : dis %9.2f r(max);
+      local max : dis %9.2g r(max);
       local max = trim("`max'");
 
-      local mean : dis %9.2f r(mean);
+      local mean : dis %9.2g r(mean);
       local mean = trim("`mean'");
 
-      local sdev : dis %9.2f r(sd);
+      local sdev : dis %9.2g r(sd);
       local sdev = trim("`sdev'");
 
   *------------------------------------------------------------*
@@ -247,7 +247,7 @@ version 13.0
     dis "|   unique:  `unique'"               _col(86) "|";
     dis "|  missing:  `missing' (`misspct'%)" _col(86) "|";
     dis "|"                                   _col(86) "|";
-    dis "|    range:  [`min',`max']"          _col(86) "|";
+    dis "|    range:  [`min', `max']"         _col(86) "|";
     dis "|"                                   _col(86) "|";
     dis "|     mean:  `mean'"                 _col(86) "|";
     dis "|     sdev:  `sdev'"                 _col(86) "|";
