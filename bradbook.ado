@@ -225,7 +225,7 @@ version 13.0
 
     /* Summary Statistics */
 
-      qui summ `var';
+      qui summ `varlist';
 
       local min : dis %9.2f r(min);
       local min = trim("`min'");
