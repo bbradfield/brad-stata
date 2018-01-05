@@ -5,7 +5,7 @@ Stata packages developed by bbradfield for Stata14+
 | Package Name | Version | Date     | Description                                           |
 |:-------------|:-------:|:--------:|:------------------------------------------------------|
 | bradsuite    | N/A     | 11/16/17 | Installs all the following brad commands at once      |
-| bradbook     | 1.0.0   | 09/26/16 | Creates a cleaner codebook for export to Word         |
+| bradbook     | 1.0.1   | 01/05/18 | Creates a cleaner codebook for export to Word         |
 | bradmean     | 1.3.4   | 01/05/18 | Computes multiple independent means in a single table |
 
 
@@ -16,7 +16,7 @@ To install from Github, copy and paste the following code:
 ```
 To install manually, download the .ado and .sthlp files and place them in the following directory:
 ```
-~/ado/plus/b/ 
+~/ado/plus/b/
 ```
 To update when connected to the internet, use:
 ```

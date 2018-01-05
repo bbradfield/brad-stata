@@ -4,128 +4,139 @@
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.3.3                                                **
-**   Date:         11/16/2017                                           **
+**   Version:      1.3.4                                                **
+**   Date:         01/05/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
 
-/* Mata */
-
 version 14.0
 mata:
 
-  /* select_long */
+void selectMatrix(string scalar matrixname,
+                  real vector rows,
+                  real vector cols)
+{
+  processmatrix = st_matrix(matrixname)
+  processmatrix = processmatrix[rows, cols]
 
-    void select_long(real scalar varcount,
-                     real scalar subcount,
-                     real scalar overcount,
-                     real vector colorder)
-    {
-      matrix current, results
+  st_matrix("r(results)", processmatrix);
+}
 
-      for(i=1; i <= varcount; i++)
-      {
-        for(j=1; j <= subcount; j++)
-        {
-          /* Getting Original Matrix */
-          originalname = "output_" + strofreal(i) + "_" + strofreal(j)
-          originalname = st_local(originalname)
-          original = st_matrix(originalname)
+end;
 
-          /* Adding Stats to Current Matrix */
-          current = original[colorder, .]
-          current = transposeonly(current)
-
-          /* Adding P-Vals to Current Matrix */
-          pvals = st_local("pvals")
-          if(overcount > 1 & pvals == "")
-          {
-            endrow = 9 + overcount
-            current = current,original[(10::endrow),(2::overcount)]
-          }
-
-          /* Adding Current Matrix to Results Matrix */
-          if(i == 1 & j == 1) results = current
-          else results = results\current
-        }
-      }
-
-      st_matrix("r(results)",results)
-    }
-
-  /* select_wide */
-
-    void select_wide(real scalar varcount,
-                     real scalar subcount,
-                     real scalar overcount,
-                     real vector colorder)
-    {
-      matrix current, results
-
-      for(i=1; i <= varcount; i++)
-      {
-        for(j=1; j <= subcount; j++)
-        {
-          /* Getting Original Matrix */
-          originalname = "output_" + strofreal(i) + "_" + strofreal(j)
-          originalname = st_local(originalname)
-          original = st_matrix(originalname)
-
-          /* Adding Stats to Current Matrix */
-          current = vec(original[colorder, .])
-
-          /* Adding P-Values to Current Matrix */
-          pvals = st_local("pvals")
-          if(pvals == "")
-          {
-            for(k=1; k < overcount; k++)
-            {
-              startrow = 10 + k
-              endrow = 9 + overcount
-              current = current\original[(startrow::endrow),k]
-            }
-          }
-
-          /* Adding Current Matrix to Results Matrix */
-          current = transposeonly(current)
-          if(i == 1 & j == 1) results = current
-          else results = results\current
-        }
-      }
-
-      st_matrix("r(results)",results)
-    }
-
-end
-
-/* Stata */
-
-program define bradmean, rclass
-version 14.0
 #delimit;
-set linesize 255;
 
-syntax varlist(numeric) [if] [in], [SVY /* svy */
-                                    SUBpop(varname numeric) /* subpop() */
-                                    OVER(varlist) /* over() */
-                                    LEVEL(cilevel) /* ci level */
-                                    ROUND(integer 7) /* number of decimals */
-                                    PCT /* format as % */
-                                    noPVALS /* don't include pvals */
-                                    noLABS /* don't include labels */
-                                    DISopt(string) /* display stats & order */
-                                    WIDE /* wide format */
-                                    TITLE(string) /* displays title above table */
-                                   ];
+**======================================================================**
+**   Routine: bradmean                                                  **
+**======================================================================**;
+
+program define bradmean, rclass sortpreserve;
+syntax varlist(numeric) [if] [in],
+  [
+    SVY                     /* gen: turn on               */
+    SUBpop(varname numeric) /* gen: subpop                */
+    OVER(varlist)           /* gen: over()                */
+    LEVEL(cilevel)          /* gen: ci level              */
+    DISopt(string)          /* gen: display stats & order */
+    FORMAT(string)          /* fmt: presets               */
+    noLABS                  /* fmt: no labels             */
+    PCT                     /* fmt: format as pct         */
+    PVALS(string)           /* fmt: pvals                 */
+    ROUND(integer 7)        /* fmt: number of decimals    */
+    TITLE(string)           /* fmt: title                 */
+    TOTAL                   /* fmt: total                 */
+    WIDE                    /* fmt: wide                  */
+  ];
 
 *--------------------------------------------------------------*
-*   01. Checking Error Codes                                   *
+*   01. Setting `matsize'                                      *
 *--------------------------------------------------------------*;
 
-  /* `svy' - data not set up for svy, use svyset */
+  local original_matsize = c(matsize);
+  if(c(matsize) < 800)
+  {;
+    set matsize 800;
+  };
 
-    if("`svy'" != "")
+*--------------------------------------------------------------*
+*   02. Generating `group_var'                                 *
+*--------------------------------------------------------------*;
+
+  local over_count = 1;
+
+  if("`over'" != "")
+  {;
+    /* Creating `group_string' & `group_numeric' */
+
+      tempvar group_string;
+      qui egen strL `group_string' = concat(`over'), decode p(", ");
+
+      tempvar group_numeric;
+      qui egen `group_numeric' = group(`over');
+
+    /* Creating `over_count' */
+
+      qui levelsof `group_numeric', local(over_lvls);
+      local over_count : word count `over_lvls';
+
+    /* Adding `group_numeric' to `group_string' */
+
+      local num_format = "%0" + string(length("`over_count'")) + ".0f";
+      qui replace `group_string' = string(`group_numeric', "`num_format'") + " " + `group_string';
+      qui replace `group_string' = "" if `group_numeric' == .;
+
+    /* Converting `group_string' to `group_numeric' */
+
+      tempname group_var;
+      encode `group_string', generate(`group_var');
+
+    /* Setting `opt_over' */
+
+      local opt_over = "over(`group_var')";
+
+    /* Cleaning */
+
+      cap drop `group_numeric';
+      cap drop `group_string';
+    };
+
+*--------------------------------------------------------------*
+*   03. Translating Format                                     *
+*--------------------------------------------------------------*;
+
+  local format = trim(strlower("`format'"));
+
+  /* Tips */
+
+    if("`format'" == "tips")
+    {;
+      local disopt = "obs n_yes mean";
+      local labs   = "";
+      local pct    = 1;
+      local pvals  = cond(`over_count' == 1, "none", "overall");
+      local round  = 7;
+      local total  = cond(`over_count' == 1, "", "total");
+      local wide   = "";
+    };
+
+  /* Simple_CI */
+
+    if("`format'" == "simple_ci")
+    {;
+      local disopt = "mean lci uci";
+      local pct    = 1;
+      local pvals  = cond(`over_count' == 1, "none", "overall");
+      local round  = 7;
+      local wide   = "";
+    };
+*--------------------------------------------------------------*
+*   04. Setting Options                                        *
+*--------------------------------------------------------------*;
+
+  /* svy - Error Code */
+
+    if("`svy'" != "" | "`subpop'" != "")
     {;
       cap qui svydescribe;
 
@@ -136,776 +147,547 @@ syntax varlist(numeric) [if] [in], [SVY /* svy */
       };
     };
 
-*--------------------------------------------------------------*
-*   02. Preparing Varlist                                      *
-*--------------------------------------------------------------*;
+  /* svy - svy */
 
-  local var_count : list sizeof varlist;
-  tokenize `varlist';
+    local svy = cond("`svy'" == "", "", "svy: ");
 
-*--------------------------------------------------------------*
-*   03. Setting Option Macros                                  *
-*--------------------------------------------------------------*;
+  /* svy - subpop */
 
-  /* Setting `svy' */
+    local svy = cond("`subpop'" == "", "`svy'", "svy, subpop(`subpop'): ");
 
-    local opt_svy_1 = "";
+  /* fmt - pct */
 
-    ** `svy' off, but has subpop() **;
-    if("`svy'" == "" & "`subpop'" != "")
-    {;
-      cap qui svyset;
-      local orig_svyset = r(settings);
+    local pct = cond("`pct'" == "", 1, 100);
 
-      tempvar unweighted;
-      qui generate `unweighted' = 1;
-      qui svyset [pw=`unweighted'];
+  /* fmt - pvals */
 
-      local svy = "svy";
-    };
+    local pvals = trim(strlower("`pvals'"));
+    local pvals = cond(!inlist("`pvals'", "all", "overall", "individual", "none"), "overall", "`pvals'");
+    local pvals = cond(`over_count' == 1, "none", "`pvals'");
 
-    ** `svy' on **;
-    if("`svy'" != "")
-    {;
-      local opt_svy_1 = "svy: ";
-      qui svyset;
-      local svy_var = r(wvar);
-    };
+    local pvals = cond(`over_count' == 2 & "`pvals'" != "none", "overall", "`pvals'");
 
-  /* Setting `over' */
+  /* fmt - round */
 
-    local over_vars = cond("`over'" == "", "", subinstr("`over'"," ",",",.));
+    local round = cond(inrange(`round', 0, 7), 1/(10^`round'), 1/(10^7));
 
-  /* Setting `round' */
+  /* fmt - total */
 
-    local opt_round = cond(inrange(`round',0,7), `round', 7);
+    local total = cond(`over_count' == 1, "", "`total'");
 
-    local opt_round = 1/(10^`opt_round');
+  /* fmt - wide */
 
-  /* Setting `pct' */
-
-    local opt_pct = cond("`pct'" == "", 1, 100);
-
-  /* Setting `wide' */
-
-    if("`over'" == "")
-    {;
-      local wide = "";
-    };
-
-  /* Marking sample `touse' */
-
-    local temp_if = "`if'";
-    local temp_if = cond("`temp_if'" == "",
-                         cond("`subpop'" == "","","if !missing(`subpop')"),
-                         cond("`subpop'" == "","`temp_if'","`temp_if' & !missing(`subpop')"));
-    local temp_if = cond("`temp_if'" == "",
-                         cond("`over'" == "","","if !missing(`over_vars')"),
-                         cond("`over'" == "","`temp_if'","`temp_if' & !missing(`over_vars')"));
-    local temp_if = cond("`temp_if'" == "",
-                         cond("`svy'" == "","","if !missing(`svy_var')"),
-                         cond("`svy'" == "","`temp_if'","`temp_if' & !missing(`svy_var')"));
-
-    tempvar touse;
-    qui mark `touse' `temp_if' `in';
-
-*--------------------------------------------------------------*
-*   04a. Finding Unique Values of `subpop'                     *
-*--------------------------------------------------------------*;
-
-  local sub_count = 1;
-
-  if("`subpop'" != "")
-  {;
-    qui levelsof `subpop' if `touse', local(subpop_lvls);
-    local sub_count : word count `subpop_lvls';
-
-    /* If only 1 level, remove the subpop option */
-
-      if(`sub_count' == 1)
-      {;
-        di as err "subpop only has 1 level, not using option" as text "";
-        local subpop = "";
-      };
-
-    /* If only 0 level, remove the subpop option & set to 1 */
-
-      if(`sub_count' == 0)
-      {;
-        di as err "subpop missing for all weighted observations, not using option" as text "";
-        local subpop = "";
-        local sub_count = 1;
-      };
-
-    /* If already dichotomous, do not make multiple variables */
-
-      if("`subpop_lvls'" == "0 1")
-      {;
-        local sub_count = 1;
-        local opt_svy_1 = "svy, subpop(`subpop'): ";
-      };
-
-    /* If categorical, make dichotomous indicator variables */
-
-      if(`sub_count' > 1)
-      {;
-        forvalues i = 1/`sub_count'
-        {;
-          local curr_level : word `i' of `subpop_lvls';
-
-          tempvar subpop_`i';
-          qui generate `subpop_`i'' = `subpop' == `curr_level' if !missing(`subpop');
-
-          local opt_svy_`i' = "svy, subpop(`subpop_`i''): ";
-        };
-      };
-  };
-
-*--------------------------------------------------------------*
-*   04b. Finding Unique Values of `over'                       *
-*--------------------------------------------------------------*;
-
-  local over_count = 1;
-  local lab_len = 0;
-
-  if("`over'" != "")
-  {;
-    /* Creating ordered `group_order' */
-
-      qui tempvar group_var;
-      qui egen strL `group_var' = concat(`over') if `touse', decode p(", ");
-
-      qui tempvar group_order;
-      qui egen `group_order' = group(`over') if `touse';
-
-    /* Creating `over_count' */
-
-      qui levelsof `group_order', local(over_lvls);
-      qui local over_count : word count `over_lvls';
-
-    /* If `over_count' == 0, set to 1 */
-
-      if(`over_count' == 0)
-      {;
-        local over_count = 1;
-      };
-
-    /* Labelling `group_order' */
-
-      qui tempvar sort_orig;
-      qui generate `sort_orig' = _n;
-
-      qui tempvar sort_temp;
-      qui generate `sort_temp' = .;
-
-      qui tempname group_lab;
-
-      local lab_len = 0;
-      forvalues i = 1/`over_count'
-      {;
-        qui replace `sort_temp' = cond(`group_order' == `i',1,.);
-        sort `sort_temp';
-
-        local temp_lab = trim(itrim(`group_var'[1]));
-        if(length("`temp_lab'") > `lab_len' & "`labs'" == "")
-        {;
-          local lab_len = length("`temp_lab'");
-        };
-        label define `group_lab' `i' "`temp_lab'", modify;
-      };
-
-      sort `sort_orig';
-      label values `group_order' `group_lab';
-
-    /* Setting opt_over */
-
-      local opt_over = "over(`group_order', nolabel)";
-  };
+    local wide = cond(`over_count' == 1, "", "`wide'");
 
 *--------------------------------------------------------------*
 *   05. Setting `disopt'                                       *
 *--------------------------------------------------------------*;
 
-  /* Checking `over_count' */
+  /* Subbing in Shorthand Words */
 
-    if(`over_count' == 1)
+    local disopt = trim(itrim(strlower("`disopt'")));
+    local disopt = subinword("`disopt'", "ci", "lci uci", .);
+    local disopt = subinword("`disopt'", "all", "obs n_yes mean se sd var lci uci", .);
+    local disopt = subinword("`disopt'", "_all", "obs n_yes mean se sd var lci uci", .);
+
+  /* Removing Invalid Words */
+
+    foreach word of local disopt
     {;
-      local over = "";
-      local opt_over = "";
-      local wide = "";
-    };
-
-  /* Cleaning Entries */
-
-    if("`disopt'" != "")
-    {;
-      local disopt = strlower("`disopt'");
-      local disopt = subinword("`disopt'","ci","lci uci",.);
-      local disopt = subinword("`disopt'","_all","obs mean se sd var lci uci",.);
-
-      local tempdisopt = "";
-
-      forvalues i = 1/`: word count `disopt''
+      if(!inlist("`word'", "obs", "n_yes", "mean", "se", "sd", "var", "lci", "uci"))
       {;
-        if(inlist(word("`disopt'",`i'),"obs","mean","se","sd","var","lci","uci"))
-        {;
-          local tempdisopt = "`tempdisopt' " + word("`disopt'",`i');
-        };
+        local disopt = subinword("`disopt'", "`word'", "", .);
       };
-
-      local disopt = trim("`tempdisopt'");
     };
 
   /* Setting Defaults */
 
-    if("`disopt'" == "" & "`wide'" == "")
+    if("`disopt'" == "")
     {;
-      local disopt = "obs mean sd lci uci";
-    };
-    if("`disopt'" == "" & "`wide'" != "")
-    {;
-      local disopt = "mean";
+      local disopt = cond("`wide'" == "", "obs n_yes mean sd lci uci", "mean");
     };
 
-  /* Setting `stat_count'*/
+  /* Subbing in Position for 1st Instance */
+
+    local i = 1;
+    foreach word in obs n_yes mean se sd var lci uci
+    {;
+      local disopt = subinword("`disopt'", "`word'", "`i'", 1);
+      local disopt = subinword("`disopt'", "`word'", "", .);
+      local i = `i' + 1;
+    };
+
+  /* Cleaning & Getting Stat Count */
+
+    local disopt = trim(itrim("`disopt'"));
 
     local stat_count : word count `disopt';
 
+    local disopt = subinstr("`disopt'", " ", ",", .);
+
 *--------------------------------------------------------------*
-*   06. Creating Matrix to be Passed to Mata                   *
+*   06. Marking Sample                                         *
 *--------------------------------------------------------------*;
 
-  tempname returns;
-  tempname grpobs;
-  tempname sd;
-  tempname variance;
-  tempname pvalues;
+  tempname touse;
 
-  forvalues i = 1/`var_count'
+  mark `touse' `if' `in';
+
+  if("`opt_over'" != "")
   {;
-    forvalues j = 1/`sub_count'
-    {;
-      /* Initializing Matrix */
+    markout `touse' `group_var';
+  };
 
-        tempname output_`i'_`j';
-        matrix `output_`i'_`j'' = J(9,`over_count',.);
-        matrix rownames `output_`i'_`j'' = b se sd var lci uci totobs subobs grpobs;
+  if("`svy'" != "")
+  {;
+    svymarkout `touse';
+  };
 
-      /* Mean `returns' */
-
-        *cap qui `opt_svy_`j'' mean ``i'' `if' `in', level(`level') `opt_over';
-        cap qui `opt_svy_`j'' mean ``i'' if `touse', level(`level') `opt_over';
-
-        matrix `returns'    = r(table);
-        local  totobs       = e(N);
-        local  subobs       = e(N_sub);
-        matrix `grpobs'     = e(_N);
-        local  n_over       = e(N_over);
-        local  n_over_names = e(over_namelist);
-
-        cap qui estat sd;
-
-        matrix `sd' = r(sd);
-        matrix `variance' = r(variance);
-
-      /* Creating P-Values */
-
-        if(`over_count' > 1 & "`pvals'" != "nopvals")
-        {;
-          matrix `pvalues' = J(`over_count',`over_count',.);
-          local temp_names;
-
-          forvalues x = 1/`over_count'
-          {;
-            local temp_names = "`temp_names' p_v`x'";
-            forvalues y = 1/`over_count'
-            {;
-              if(`x' != `y')
-              {;
-                cap qui test [``i'']`x' == [``i'']`y';
-                local pval = r(p);
-                matrix `pvalues'[`x',`y'] = round(`pval',0.0001);
-              };
-            };
-          };
-
-          matrix rownames `pvalues' = `temp_names';
-          matrix `output_`i'_`j'' = `output_`i'_`j'' \ `pvalues';
-        };
-
-      /* Placing `returns' in Matrix */
-
-        if("`over'" == "")
-        {;
-          matrix `output_`i'_`j''[1,1] = round(`returns'[1,1] *`opt_pct',`opt_round');
-          matrix `output_`i'_`j''[2,1] = round(`returns'[2,1] *`opt_pct',`opt_round');
-          matrix `output_`i'_`j''[3,1] = round(`sd'[1,1]      *`opt_pct',`opt_round');
-          matrix `output_`i'_`j''[4,1] = round(`variance'[1,1]*`opt_pct',`opt_round');
-          matrix `output_`i'_`j''[5,1] = round(`returns'[5,1] *`opt_pct',`opt_round');
-          matrix `output_`i'_`j''[6,1] = round(`returns'[6,1] *`opt_pct',`opt_round');
-          matrix `output_`i'_`j''[7,1] = `totobs';
-          matrix `output_`i'_`j''[8,1] = `subobs';
-        };
-        else
-        {;
-          local x = 1;
-          foreach col in `n_over_names'
-          {;
-            matrix `output_`i'_`j''[1,`col'] = round(`returns'[1,`x'] *`opt_pct',`opt_round');
-            matrix `output_`i'_`j''[2,`col'] = round(`returns'[2,`x'] *`opt_pct',`opt_round');
-            matrix `output_`i'_`j''[3,`col'] = round(`sd'[1,`x']      *`opt_pct',`opt_round');
-            matrix `output_`i'_`j''[4,`col'] = round(`variance'[1,`x']*`opt_pct',`opt_round');
-            matrix `output_`i'_`j''[5,`col'] = round(`returns'[5,`x']*`opt_pct',`opt_round');
-            matrix `output_`i'_`j''[6,`col'] = round(`returns'[6,`x']*`opt_pct',`opt_round');
-            matrix `output_`i'_`j''[7,`col'] = `totobs';
-            matrix `output_`i'_`j''[8,`col'] = `subobs';
-            matrix `output_`i'_`j''[9,`col'] = `grpobs'[1,`x'];
-
-            local ++x;
-          };
-        };
-
-    };
+  if("`subpop'" != "")
+  {;
+    tempvar in_subpop;
+    qui generate `in_subpop' = `subpop';
+    qui replace  `in_subpop' = . if `subpop' != 1;
+    markout `touse' `in_subpop';
   };
 
 *--------------------------------------------------------------*
-*   07. Getting Information to Format Table                    *
+*   07. Creating Results                                       *
 *--------------------------------------------------------------*;
 
-  /* Length */
+  tempname var_original;
+  tempname var_process;
+  tempname var_final;
+  tempname total_final;
 
-    local length = 10;
+  local group_count = cond("`total'" == "", `over_count', `=`over_count'+1');
 
-    /* `sub', `over' */
+  local dis_len = 14;
 
-      ** Long **;
+  foreach var of varlist `varlist'
+  {;
+    /* Setting Display Length */
+
+      local dis_len = cond(length("`var'") >= `dis_len', length("`var'") + 1, `dis_len');
+
+    /* Calculating - Over */
+
+      calculateResults `var', sample(`touse') svy(`svy') `opt_over' level(`level') round(`round') pct(`pct') pvals(`pvals');
+      matrix `var_original' = r(results);
+
+    /* Calculating - Total */
+
+      if("`total'" != "")
+      {;
+        calculateResults `var', sample(`touse') svy(`svy') `opt_over' `total' level(`level') round(`round') pct(`pct') pvals(`pvals');
+        matrix `var_original' = `var_original' \ r(results);
+      };
+
+    /* Finalizing Variable Matrix - Long */
+
       if("`wide'" == "")
       {;
-        if(`lab_len' > 30)
+        ** Stats **;
+        mata: selectMatrix("`var_original'", (1::`group_count'), (`disopt'));
+        matrix `var_final' = r(results);
+
+        ** PVals - Overall **;
+        if(inlist("`pvals'", "all", "overall"))
         {;
-          local labs = "nolabs";
+          mata: selectMatrix("`var_original'", (1::`group_count'), (9));
+          matrix `var_final' = `var_final', r(results);
         };
 
-        local temp_len = cond(`sub_count' == 1, 0, length("_sub_`sub_count'"));
-        local temp_len = `temp_len' + cond(`over_count' == 1, 0, cond("`labs'" == "", length("_over_`over_count'"), `lab_len'));
-
-        local length = cond(`temp_len' > `length', `temp_len', `length');
+        ** PVals - Individual **;
+        if(inlist("`pvals'", "all", "individual"))
+        {;
+          mata: selectMatrix("`var_original'", (1::`group_count'), (10::`=9+`over_count''));
+          matrix `var_final' = `var_final', r(results);
+        };
       };
 
-      ** Wide **;
+    /* Finalizing Variable Matrix - Wide */
+
       if("`wide'" != "")
       {;
-        if(`lab_len' > `=`stat_count'*10')
+        ** Stats **;
+        mata: selectMatrix("`var_original'", (1::`group_count'), (`disopt'));
+        matrix `var_final' = vec(r(results)')';
+
+        ** PVals - Overall **;
+        if(inlist("`pvals'", "all", "overall"))
         {;
-          local labs = "nolabs";
+          mata: selectMatrix("`var_original'", (1), (9));
+          matrix `var_final' = `var_final', r(results);
         };
 
-        local temp_len = cond(`sub_count' == 1, 0, length("_sub_`sub_count'"));
-
-        local length = cond(`temp_len' > `length', `temp_len', `length');
-      };
-
-    /* `varlist' */
-
-      forvalues i = 1/`var_count'
-      {;
-        if(length("``i''") >= `length')
+        ** PVals - Individual **;
+        if(inlist("`pvals'", "all", "individual"))
         {;
-          local length = length("``i''") + 1;
-        };
-      };
+          mata: selectMatrix("`var_original'", (2::`over_count'), (10::`=8+`over_count''));
+          matrix `var_process' = r(results);
 
-  /* By `disopt': `col_order', `col_names', `col_format' */
-
-    local col_order  = "";
-    local col_names  = "";
-    local col_format = "";
-
-    foreach i in `disopt'
-    {;
-      /* obs */
-
-        if("`i'" == "obs")
-        {;
-          local col_names = `" `col_names' "Obs" "';
-          if("`over'" != "")
-          {;
-            local col_order = "`col_order',9";
-            local col_format = "`col_format' & %9.0fc";
-            continue;
-          };
-          if("`subpop'" != "")
-          {;
-            local col_order = "`col_order',8";
-            local col_format = "`col_format' & %9.0fc";
-            continue;
-          };
-          local col_order = "`col_order',7";
-          local col_format = "`col_format' & %9.0fc";
-        };
-
-      /* mean */
-
-        if("`i'" == "mean")
-        {;
-          local col_order = "`col_order',1";
-          local col_names = `" `col_names' "Mean" "';
-          local col_format = "`col_format' & %9.0g";
-        };
-
-      /* se */
-
-        if("`i'" == "se")
-        {;
-          local col_order = "`col_order',2";
-          local col_names = `" `col_names' "Std Err" "';
-          local col_format = "`col_format' & %9.0g";
-        };
-
-      /* sd */
-
-        if("`i'" == "sd")
-        {;
-          local col_order = "`col_order',3";
-          local col_names = `" `col_names' "Std Dev" "';
-          local col_format = "`col_format' & %9.0g";
-        };
-
-      /* var */
-
-        if("`i'" == "var")
-        {;
-          local col_order = "`col_order',4";
-          local col_names = `" `col_names' "Variance" "';
-          local col_format = "`col_format' & %9.0g";
-        };
-
-      /* lci */
-
-        if("`i'" == "lci")
-        {;
-          local col_order = "`col_order',5";
-          local col_names = `" `col_names' "Lower CI" "';
-          local col_format = "`col_format' & %9.0g";
-        };
-
-      /* uci */
-
-        if("`i'" == "uci")
-        {;
-          local col_order = "`col_order',6";
-          local col_names = `" `col_names' "Upper CI" "';
-          local col_format = "`col_format' & %9.0g";
-        };
-    };
-
-    local col_order  = "(" + substr("`col_order'",2,.) + ")";
-    local col_names  = trim(`"`col_names'"');
-    local col_format = trim("`col_format'");
-
-  /* `row_format' */
-
-    local temp;
-
-    ** Long **;
-    if("`wide'" == "")
-    {;
-      local temp = (`=`over_count'-1' * "&")
-                 + cond(`over_count' > 1, "-", "&");
-
-      local temp = (`=`sub_count'-1' * "`temp'")
-                 + substr("`temp'", 1, length("`temp'")-1)
-                 + cond(`sub_count' > 1 | `over_count' > 1, "-", "&");
-
-      local temp = `var_count' * "`temp'";
-    };
-
-    ** Wide **;
-    if("`wide'" != "")
-    {;
-      local temp = (`=`sub_count'-1' * "&")
-                 + cond(`sub_count' > 1, "-", "&");
-
-      local temp = `var_count' * "`temp'";
-    };
-
-    local row_format = "&-" + substr("`temp'", 1, length("`temp'")-1) + "&";
-
-  /* `col_format' */
-
-    local temp;
-
-    if("`wide'" != "")
-    {;
-      local temp = subinword("`col_format'", "&", "|", 1);
-      local col_format = `over_count' * "`temp' ";
-    };
-
-  /* `col_eqs', `row_names', `row_eqs' */
-
-    local col_eqs   = "";
-    local row_names = "";
-    local row_eqs   = "";
-
-    forvalues i = 1/`var_count'
-    {;
-      forvalues j = 1/`sub_count'
-      {;
-        forvalues k = 1/`over_count'
-        {;
-          /* `col_eqs' */
-
-            ** Long **;
-            if("`wide'" == "" & `"`col_eqs'"' == "")
-            {;
-              local col_eqs = trim(`stat_count' * "_: ");
-            };
-
-            ** Wide **;
-            if("`wide'" != "" & `i' == 1 & `j' == 1)
-            {;
-              local temp_lab = cond("`labs'" == "",
-                               `stat_count' * `" "`: label (`group_order') `k''" "',
-                               `stat_count' * "_over_`k' ");
-
-              local col_eqs = `" `col_eqs' `temp_lab' "';
-            };
-
-          /* `row_names' */
-
-            ** Long **;
-            if("`wide'" == "")
-            {;
-              if(`sub_count' == 1 & `over_count' == 1)
-              {;
-                local row_names = "`row_names' ``i''";
-              };
-
-              if(`sub_count' == 1 & `over_count' > 1)
-              {;
-                local temp_lab = cond(`over_count' == 1, "", cond("`labs'" == "", `"`: label (`group_order') `k''"', "_over_`k'"));
-                local row_names = `" `row_names' "`temp_lab'" "';
-              };
-
-              if(`sub_count' > 1)
-              {;
-                local temp_lab = "_sub_`j'" + cond(`over_count' == 1, "", "_over_`k'");
-                local row_names = `"`row_names' `temp_lab'"';
-              };
-            };
-
-            ** Wide **;
-            if("`wide'" != "" & `k' == 1)
-            {;
-              local row_names = "`row_names' "
-                              + cond(`sub_count' > 1, "_sub_`j'", "``i''");
-            };
-
-          /* `row_eqs' */
-
-            ** Long **;
-            if("`wide'" == "")
-            {;
-              local row_eqs = "`row_eqs' "
-                            + cond(`=`sub_count'*`over_count'' > 1, "``i'':", "");
-            };
-
-            ** Wide **;
-            if("`wide'" != "" & `k' == 1)
-            {;
-              local row_eqs = "`row_eqs' "
-                            + cond(`sub_count' > 1, "``i'':", "");
-            };
-
+          mata: st_matrix("`var_process'",vech(st_matrix("`var_process'"))');
+          matrix `var_final' = `var_final', `var_process';
         };
       };
-    };
 
-  /* `p_names', `p_eqs', `p_format' */
+    /* Adding to Final Matrix */
 
-    local p_names   = "";
-    local p_eqs     = "";
-    local p_format  = "";
+      matrix `total_final' = nullmat(`total_final') \ `var_final';
+  };
 
-    ** Long **;
-    if("`wide'" == "" & "`pvals'" != "nopvals")
+*--------------------------------------------------------------*
+*   08. Preparing General Row & Column Specs                   *
+*--------------------------------------------------------------*;
+
+  /* Stat Names */
+
+    local statnames = subinstr("`disopt'", ",", " ", .);
+    local statnames = subinword(`"`statnames'"', "1", `""Obs""', .);
+    local statnames = subinword(`"`statnames'"', "2", `""n_Yes""', .);
+    local statnames = subinword(`"`statnames'"', "3", `""Mean""', .);
+    local statnames = subinword(`"`statnames'"', "4", `""Std Err""', .);
+    local statnames = subinword(`"`statnames'"', "5", `""Std Dev""', .);
+    local statnames = subinword(`"`statnames'"', "6", `""Var""', .);
+    local statnames = subinword(`"`statnames'"', "7", `""Lower CI""', .);
+    local statnames = subinword(`"`statnames'"', "8", `""Upper CI""', .);
+
+  /* P Names */
+
+    if(inlist("`pvals'", "all", "overall"))
     {;
-      forvalues i = 2/`over_count'
-      {;
-        local p_names = `" `p_names' "vs `i'" "';
-        local p_eqs = "`p_eqs' P_Vals:";
-        local p_format = "`p_format' & %5.4f";
-      };
+      local pnames = `" `pnames' "Overall" "';
     };
 
-    ** Wide **;
-    if("`wide'" != "" & "`pvals'" != "nopvals")
+    if(inlist("`pvals'", "all", "individual"))
     {;
       forvalues i = 1/`over_count'
       {;
-        local j = `i' + 1;
-        while `j' <= `over_count'
+        ** Long **;
+        if("`wide'" == "")
         {;
-          local p_names = `" `p_names' "`i'-`j'" "';
-          local p_eqs = "`p_eqs' P_Vals:";
-          local p_format = "`p_format' & %5.4f";
-          local ++j;
+          local pnames = `" `pnames' "vs `i'" "';
         };
+
+        ** Wide **;
+        if("`wide'" != "" & `i' < `over_count')
+        {;
+          forvalues j = `=1+`i''/`over_count'
+          {;
+            local pnames = `" `pnames' "`i'v`j'" "';
+          };
+        };
+
       };
     };
 
-  /* Trimming Information */
+    local pnames = trim(itrim(`"`pnames'"'));
 
-    local col_order  = trim(itrim(`"`col_order'"'));
-    local col_names  = trim(itrim(`"`col_names'"'));
-    local col_eqs    = trim(itrim(`"`col_eqs'"'));
-    local col_format = trim(itrim(`"`col_format'"'));
+  /* Over Names */
 
-    local p_names    = trim(itrim(`"`p_names'"'));
-    local p_eqs      = trim(itrim(`"`p_eqs'"'));
-    local p_format   = trim(itrim(`"`p_format'"'));
+    local lab_len = 14;
 
-    local row_names  = trim(itrim(`"`row_names'"'));
-    local row_eqs    = trim(itrim(`"`row_eqs'"'));
-    local row_format = trim(itrim(`"`row_format'"'));
-
-  /* Checking Display Length (first row) */
-
-    foreach i in `row_names'
+    if("`opt_over'" != "")
     {;
-      if (length("`i'") >= `length')
+      forvalues i = 1/`over_count'
       {;
-        local length = length("`i'") + 2;
+        local temp_name = trim(substr("`: label (`group_var') `i''", length("`over_count'")+1, .));
+        local overnames_long  = `" `overnames_long' "`temp_name'" "';
+        local overnames_short = `" `overnames_short' "_over_`i'" "';
+
+        local lab_len = cond(length("`temp_name'") >= `lab_len', length("`temp_name'") + 1, `lab_len');
       };
+
+      if("`total'" != "")
+      {;
+        local overnames_long  = `" `overnames_long' "Total" "';
+        local overnames_short = `" `overnames_short' "Total" "';
+      };
+
+      local overnames_long  = trim(itrim(`"`overnames_long'"'));
+      local overnames_short = trim(itrim(`"`overnames_short'"'));
     };
 
-  /* Finalizing Information */
+  /* Column Formats */
 
-    ** Long **;
-    if("`wide'" == "")
-    {;
-      local col_names  = trim(`" `col_names' `p_names' "');
-      local col_eqs    = trim(`" `col_eqs' `p_eqs' "');
-      local col_format = "& %-`length's " +
-                         subinstr("`col_format'", "&", "|", 1) +
-                         " " +
-                         subinstr("`p_format'", "&", "|", 1) +
-                         " &";
-      local col_format = trim(itrim("`col_format'"));
-    };
-
-    ** Wide **;
-    if("`wide'" != "")
-    {;
-      local col_names  = trim(itrim((`"`col_names'"' * `over_count')));
-      local col_names  = trim(`" `col_names' `p_names' "');
-      local col_eqs    = trim(`" `col_eqs' `p_eqs' "');
-      local col_format = "& %-`length's `col_format' " +
-                         subinstr("`p_format'", "&", "|", 1) +
-                         " &";
-      local col_format = trim(itrim("`col_format'"));
-    };
+    local colformats = subinstr("`disopt'", ",", " & ", .);
+    local colformats = subinword("`colformats'", "1", "%9.0fc", .);
+    local colformats = subinword("`colformats'", "2", "%9.0fc", .);
+    local colformats = subinword("`colformats'", "3", "%9.0g", .);
+    local colformats = subinword("`colformats'", "4", "%9.0g", .);
+    local colformats = subinword("`colformats'", "5", "%9.0g", .);
+    local colformats = subinword("`colformats'", "6", "%9.0g", .);
+    local colformats = subinword("`colformats'", "7", "%9.0g", .);
+    local colformats = subinword("`colformats'", "8", "%9.0g", .);
 
 *--------------------------------------------------------------*
-*   08. Creating Results Matrix                                *
+*   09. Applying Row & Column Specs                            *
 *--------------------------------------------------------------*;
-
-  tempname results;
 
   /* Long */
 
     if("`wide'" == "")
     {;
-      mata: select_long(`var_count', `sub_count', `over_count', `col_order');
-      matrix `results' = r(results);
+      ** dis_len **;
+      local dis_len = cond(`lab_len' > `dis_len', cond(`lab_len' > 30, `dis_len', `lab_len'), `dis_len');
 
-      matrix colnames `results' = `col_names';
-      matrix rownames `results' = `row_names';
-      matrix coleq    `results' = `col_eqs';
-      matrix roweq    `results' = `row_eqs';
+      ** colnames **;
+      local colnames = trim(itrim(`" `statnames' `pnames' "'));
+
+      ** coleqs **;
+      local coleqs = ("_: " * `stat_count') + ("P_Vals: " * `: list sizeof pnames');
+
+      ** colformats **;
+      local colformats = "`colformats'" + cond("`pvals'" == "none", " &", " |" + (" %5.4f &" * `: list sizeof pnames'));
+
+      ** rownames **;
+      local rownames = cond("`over'" == "", "`varlist'", cond(`lab_len' > 30, `"`overnames_short'"', `"`overnames_long'"') * `: list sizeof varlist');
+
+      ** roweqs **;
+      foreach var of varlist `varlist'
+      {;
+        local roweqs = "`roweqs' " + cond("`over'" == "", "_: ", ("`var': " * `group_count'));
+      };
+
+      ** rowformats **;
+      local rowformats = (("&" * `=`group_count'-1') + cond("`over'" == "", "&", "-")) * `: list sizeof varlist';
+
+      ** Finalizing **;
+      local colformats = "& %-`dis_len's | `colformats'";
+      local rowformats = "&-`rowformats'";
     };
 
   /* Wide */
 
     if("`wide'" != "")
     {;
-      mata: select_wide(`var_count', `sub_count', `over_count', `col_order');
-      matrix `results' = r(results);
+      ** colnames **;
+      local colnames = trim(itrim((`" `statnames' "' * `group_count') + `" `pnames' "'));
 
-      matrix colnames `results' = `col_names';
-      matrix rownames `results' = `row_names';
-      matrix coleq    `results' = `col_eqs';
-      matrix roweq    `results' = `row_eqs';
+      ** coleqs **;
+      local overnames_temp = cond(`lab_len' > 9, `"`overnames_short'"', `"`overnames_long'"');
+      foreach word of local overnames_temp
+      {;
+        local temp_name = `" "`word':" "' * `stat_count';
+        local coleqs = trim(itrim(`" `coleqs' `temp_name' "'));
+      };
+      local temp_name = `" "P_Vals:" "' * `: list sizeof pnames';
+      local coleqs = trim(itrim(`" `coleqs' `temp_name' "'));
+
+      ** colformats **;
+      local colformats = ("`colformats' | " * `=`group_count'-1') + "`colformats'" + cond("`pvals'" == "none", " &", " |" + (" %5.4f &" * `: list sizeof pnames'));
+
+      ** rownames **;
+      local rownames = `"`varlist'"';
+
+      ** roweqs **;
+      local roweqs = trim(itrim("_: " * `: list sizeof varlist'));
+
+      ** rowformats **;
+      local rowformats = "&" * `: list sizeof varlist';
+
+      ** Finalizing **;
+      local colformats = "& %-`dis_len's | `colformats'";
+      local rowformats = "&-`rowformats'";
     };
 
+  /* Applying */
+
+    matrix colnames `total_final' = `colnames';
+    matrix coleq    `total_final' = `coleqs';
+    matrix rownames `total_final' = `rownames';
+    matrix roweq    `total_final' = `roweqs';
+
 *--------------------------------------------------------------*
-*   09. Displaying Results                                     *
+*   10. Displaying Results                                     *
 *--------------------------------------------------------------*;
 
   /* Title */
 
     if("`title'" != "")
     {;
-      di;
-      di "{title:`title'}";
+      dis;
+      dis "{title:`title'}";
     };
 
-  /* Group Labels */
+  /* Group Label */
 
-    /* Length */
+    local num_format = 6 + length("`over_count'");
 
-      local length = 1;
-
-      if(length("_sub_`sub_count'") > `length')
+    if("`over'" != "")
+    {;
+      dis;
+      forvalues i = 1/`over_count'
       {;
-        local length = length("_sub_`sub_count'");
+        local temp_name = trim(substr("`: label (`group_var') `i''", length("`over_count'")+1, .));
+        dis %-`num_format's "_over_`i'" " | " subinstr("`over'",",",", ",.) " = " `""`temp_name'""';
       };
-
-      if(length("_over_`over_count'") > `length')
-      {;
-        local length = length("_over_`over_count'");
-      };
-
-    /* Subpop */
-
-      if(`sub_count' > 1)
-      {;
-        di;
-        local length = length("_sub_`sub_count'");
-
-        forvalues i = 1/`sub_count'
-        {;
-          di %-`length's "_sub_`i'" " | `subpop' = " `""`: label (`subpop') `: word `i' of `subpop_lvls'''""';
-        };
-      };
-
-    /* Over */
-
-      if(`over_count' > 1)
-      {;
-        di;
-        local length = length("_over_`over_count'");
-
-        forvalues i = 1/`over_count'
-        {;
-          di %-`length's "_over_`i'" " | " subinstr("`over_vars'",",",", ",.) " = " `""`: label (`group_order') `i''""';
-        };
-
-      };
+    };
 
   /* Listing Matrix */
 
-    matlist `results', cspec(`col_format')
-                       rspec(`row_format')
-                       showcoleq(combined);
+    matlist `total_final', cspec(`colformats')
+                           rspec(`rowformats')
+                           showcoleq(combined);
 
-  /* Returning Results */
+*--------------------------------------------------------------*
+*   11. Returning Results & Resetting Changes                  *
+*--------------------------------------------------------------*;
 
-    return matrix results = `results';
-
-  /* Resetting `svyset' */
-
-    cap qui svyset `orig_svyset';
+  return matrix results = `total_final';
+  cap qui set matsize `original_matsize';
 
 end;
 
+**======================================================================**
+**   Subroutine: calculateResults                                       **
+**======================================================================**;
+
+program define calculateResults, rclass;
+syntax varname(numeric),
+  SAMPLE(varname numeric)
+  [
+    SVY(string)
+    OVER(varname numeric)
+    TOTAL
+    LEVEL(cilevel)
+    ROUND(real 0.0000001)
+    PCT(integer 1)
+    PVALS(string)
+  ];
+
+*--------------------------------------------------------------*
+*   01. Initializing Options                                   *
+*--------------------------------------------------------------*;
+
+  /* Matrices */
+
+    tempname results_mean;
+    tempname results_obs;
+    tempname results_sd;
+    tempname results_variance;
+    tempname results_total;
+
+  /* Over */
+
+    local over_count = 1;
+    if("`over'" != "")
+    {;
+      qui levelsof `over', local(over_lvls);
+
+      local over_count : word count `over_lvls';
+
+      local opt_over = "over(`over', nolabel)";
+    };
+
+    local col_count = 9 + `over_count';
+
+  /* Total */
+
+    if("`total'" != "")
+    {;
+      local over_count = 1;
+      local opt_over = "";
+    };
+
+*--------------------------------------------------------------*
+*   02. Getting Mean & SD Estimates                            *
+*--------------------------------------------------------------*;
+
+  qui `svy' mean `varlist' if `sample', level(`level') `opt_over';
+
+  /* `results_mean' */
+
+    matrix `results_mean' = r(table);
+
+  /* `results_obs' */
+
+    matrix `results_obs' = e(_N);
+
+  /* `results_overlabs' */
+
+    local results_overlabs = "";
+
+    if("`opt_over'" != "")
+    {;
+      local results_overlabs = e(over_labels);
+    };
+
+  /* `results_sd' & `results_variance' */
+
+    qui estat sd;
+
+    matrix `results_sd' = r(sd);
+    matrix `results_variance' = r(variance);
+
+*--------------------------------------------------------------*
+*   03. Creating Matrix to Return                              *
+*--------------------------------------------------------------*;
+
+  matrix `results_total' = J(`over_count', `col_count', .);
+
+  local pos = 1;
+  forvalues i = 1/`over_count'
+  {;
+    if("`opt_over'" != "" & "`: word `pos' of `results_overlabs''" != "`i'")
+    {;
+      continue;
+    };
+
+    /* Getting n_yes */
+
+      if(`over_count' == 1)
+      {;
+        qui count if `sample' & `varlist' & !missing(`varlist');
+        local n_yes = r(N);
+      };
+      else
+      {;
+        qui count if `sample' & `varlist' & !missing(`varlist') & `over' == `i';
+        local n_yes = r(N);
+      };
+
+    /* Inputting Mean Results */
+
+      matrix `results_total'[`i',1] = `results_obs'[1,`pos'];
+      matrix `results_total'[`i',2] = `n_yes';
+      matrix `results_total'[`i',3] = round(`results_mean'[1,`pos']     * `pct', `round');
+      matrix `results_total'[`i',4] = round(`results_mean'[2,`pos']     * `pct', `round');
+      matrix `results_total'[`i',5] = round(`results_sd'[1,`pos']       * `pct', `round');
+      matrix `results_total'[`i',6] = round(`results_variance'[1,`pos'] * `pct', `round');
+      matrix `results_total'[`i',7] = round(`results_mean'[5,`pos']     * `pct', `round');
+      matrix `results_total'[`i',8] = round(`results_mean'[6,`pos']     * `pct', `round');
+
+    /* PVals - Overall */
+
+      if(`over_count' > 1 & inlist("`pvals'", "all", "overall"))
+      {;
+        local test_cmd = "[`varlist']" + subinstr("`e(over_namelist)'"," ","=[`varlist']",.);
+        cap qui test `test_cmd';
+        matrix `results_total'[`i',9] = round(r(p), 0.0001);
+      };
+
+    /* PVals - Individual */
+
+      if(`over_count' > 1 & inlist("`pvals'", "all", "individual"))
+      {;
+        forvalues j = 1/`over_count'
+        {;
+          cap qui test [`varlist']`i'=[`varlist']`j';
+          matrix `results_total'[`i',`=9+`j''] = round(r(p), 0.0001);
+        };
+      };
+
+    /* Incrementing */
+
+      local pos = `pos' + 1;
+  };
+
+*--------------------------------------------------------------*
+*   04. Returning Matrix                                       *
+*--------------------------------------------------------------*;
+
+  return matrix results = `results_total';
+
+end;

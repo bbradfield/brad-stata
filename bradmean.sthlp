@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.3.3  16nov2017}{...}
+{* *! version 1.3.4  05nov2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -23,17 +23,22 @@
 {synoptset 20 tabbed}{...}
 {synopthdr}
 {synoptline}
-{syntab:Main}
+{syntab:General}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
-{synopt:{cmd:subpop(}{it:{help varname}}{cmd:)}}subpopulation estimation by {it:varname}{p_end}
+{synopt:{cmd:subpop(}{it:{help varname}}{cmd:)}}subpopulation estimation by {it:varname}; {it:varname} must be 0/1{p_end}
 {synopt:{cmd:over(}{it:{help varlist}}{cmd:)}}estimation over groups defined by {it:varlist}{p_end}
 {synopt:{opt level(#):}}set confidence level; default is {bf:level(95)}{p_end}
-{synopt:{opt round(#):}}rounds to # decimal places; range 0-7{p_end}
-{synopt:{opt pct:}}displays results as percentage (multiplied by 100){p_end}
-{synopt:{opt nopvals:}}does not calculate p-values; default is {bf:off}{p_end}
 {synopt:{cmd:disopt(}{it:{help (strings:string}}{cmd:)}}select which statistics will be displayed and in what order{p_end}
-{synopt:{opt wide:}}displays in wide format{p_end}
+
+{syntab:Format}
+{synopt:{cmd:format(}{it:{help (strings:string}}{cmd:)}}allows pre-defined format options{p_end}
+{synopt:{opt nolabs:}}turn off group labels{p_end}
+{synopt:{opt pct:}}displays results as percentage (multiplied by 100){p_end}
+{synopt:{cmd:pvals(}{it:{help (strings:string}}{cmd:)}}select which type of p-values to be displayed{p_end}
+{synopt:{opt round(#):}}rounds to # decimal places; range 0-7{p_end}
 {synopt:{cmd:title(}{it:{help (strings:string}}{cmd:)}}title displayed above table{p_end}
+{synopt:{opt total:}}displays total as a group when {bf:over} is specified{p_end}
+{synopt:{opt wide:}}displays in wide format{p_end}
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
@@ -49,13 +54,13 @@
 {marker options}{...}
 {title:Options}
 
-{dlgtab:Main}
+{dlgtab:General}
 
 {phang}
 {opt svy} specifies that statistics will be survey weighted.
 
 {phang}
-{cmd:subpop(}{it:{help varname}}{cmd:)} specifies that estimates be computed using subpopulation {varname}. If {varname} is categorical, bradmean splits it into indicator variables for each level.
+{cmd:subpop(}{it:{help varname}}{cmd:)} specifies that estimates be computed using subpopulation {varname}. {varname} must be 0/1.
 
 {phang}
 {cmd:over(}{it:{help varlist}}{cmd:)} specifies that estimates be computed for multiple groups, which are identified by the different values of the variable(s) {varlist}.
@@ -64,19 +69,12 @@
 {opt level(#)} see {helpb estimation options##level():[R] estimation options}.
 
 {phang}
-{opt round(#)} rounds statistics to # decimal places (range 0-7).
-
-{phang}
-{opt pct} specifies that statistics will be displayed as percentage (multiplied by 100).
-
-{phang}
-{opt nopvals} does not calculate p-values; default is {bf:off}.
-
-{phang}
 {cmd:disopt(}{it:{help (strings:string}}{cmd:)} specifies which statistics will be display and in what order. Available statistics:
 
 {space 12}{opt _all} {space 4} all statistics below
+{space 12}{opt all} {space 5} all statistics below
 {space 12}{opt obs} {space 5} observations (n)
+{space 12}{opt n_yes} {space 3} observations with {it:varname} != 0 & !missing({it:varname})
 {space 12}{opt mean} {space 4} mean (b)
 {space 12}{opt se} {space 6} standard error (se)
 {space 12}{opt sd} {space 6} standard deviation (sd)
@@ -84,32 +82,40 @@
 {space 12}{opt ci} {space 6} confidence interval (lci-uci)
 
 {pmore}
-default for {bf:long} is {cmd:disopt(obs mean sd ci)}
+default for {bf:long} is {cmd:disopt(obs n_yes mean sd ci)}
 {p_end}
 {pmore}
 default for {bf:wide} is {cmd:disopt(mean)}
 {p_end}
 
+{dlgtab:Format}
+
 {phang}
-{opt wide} specifies that estimates will be output in a wide format (only in cases where {opt over} is specified).
+{cmd:format(}{it:{help (strings:string}}{cmd:)} interprets pre-defined format options. Available statistics:
+
+{space 12}{opt tips} {space 6} disopt(obs n_yes mean), labs(on), pct(off), pvals(overall), round(7), total(on), wide(off)
+{space 12}{opt simple_ci} {space 1} disopt(mean lci uci), labs(on), pct(off), pvals(overall), round(7), total(off), wide(off)
+
+{phang}
+{opt nolabs} turns off group labels.
+
+{phang}
+{opt pct} specifies that statistics will be displayed as percentage (multiplied by 100).
+
+{phang}
+{cmd:pvals(}{it:{help (strings:string}}{cmd:)} specifies which p-values to display, Options are "all", "overall", "individual", "none". Default is "overall".
+
+{phang}
+{opt round(#)} rounds statistics to # decimal places (range 0-7).
 
 {phang}
 {cmd:title(}{it:{help (strings:string}}{cmd:)} display specified title above table.
 
-{marker examples}{...}
-{title:Examples}
+{phang}
+{opt total} displays total as a group when {bf:over} is specified.
 
-{phang}{cmd:. bradmean mpg foreign}{p_end}
-
-{phang}{cmd:. bradmean mpg foreign, disopt(mean sd)}{p_end}
-
-{phang}{cmd:. bradmean mpg foreign, svy}{p_end}
-
-{phang}{cmd:. bradmean mpg, svy over(foreign)}{p_end}
-
-{phang}{cmd:. bradmean mpg, svy subpop(make) over(foreign)}{p_end}
-
-{phang}{cmd:. bradmean mpg, svy subpop(make0 over(foreign) wide}{p_end}
+{phang}
+{opt wide} specifies that estimates will be output in a wide format (only in cases where {opt over} is specified).
 
 {marker results}{...}
 {title:Stored results}

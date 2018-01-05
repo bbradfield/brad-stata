@@ -1,5 +1,3 @@
-#delimit;
-set linesize 255;
 
 **======================================================================**
 **======================================================================**
@@ -7,81 +5,64 @@ set linesize 255;
 **   Program:      bradbook.ado                                         **
 **   Purpose:      Outputting a better formatted codebook               **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.0.0                                                **
-**   Date:         09/26/2016                                           **
+**   Version:      1.0.1                                                **
+**   Date:         01/05/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
-capture program drop bradbook;
-program define bradbook, rclass;
-syntax [varlist], [EXPort(string) REPLACE];
+version 13.0
+#delimit;
+
+**======================================================================**
+**   Routine: bradbook                                                  **
+**======================================================================**;
+
+  program define bradbook, rclass sortpreserve;
+  syntax [varlist],
+    [
+      EXPort(string)
+      REPLACE
+    ];
 
   *------------------------------------------------------------*
-  *   01. Counting Number of Variables                         *
+  *   01. Defining Header Variables                            *
   *------------------------------------------------------------*;
 
-    local varlistlength : list sizeof varlist;
-    tokenize `varlist';
+    ** Date **;
+    local date = trim(substr("`c(filedate)'", 1, strrpos("`c(filedate)'"," ")));
+
+    ** VarTotal **;
+    qui des;
+    local vartotal = r(k) - 1;
+
+    ** Size **;
+    qui memory;
+    if (`r(data_data_u)' >= (1000 * 1000))
+    {;
+      local size = `r(data_data_u)' / (1000 * 1000);
+      local size : dis %-9.2f `size';
+      local size = trim("`size'") + " GB";
+    };
+    else
+    {;
+      local size = `r(data_data_u)' / 1000;
+      local size : dis %-9.0f `size';
+      local size = trim("`size'") + " MB";
+    };
 
   *------------------------------------------------------------*
-  *   02. Defining Header Variables                            *
-  *------------------------------------------------------------*;
-
-    **  Title - Title of dataset  **;
-
-      local title : data label;
-
-    **  Date - Date of dataset  **;
-
-      local date = trim(substr("`c(filedate)'",1,strrpos("`c(filedate)'"," ")));
-
-    **  ObsCount - Number of observations  **;
-
-      local obscount : dis %-9.0fc _N;
-
-    **  VarTotal - Numeric count of variables  **;
-    **  VarCount - Display count of variables  **;
-
-      qui des _all;
-      local vartotal = r(k);
-      local varcount : dis %-9.0fc r(k);
-
-    **  Size - Size of dataset  **;
-
-      qui memory;
-      if (`r(data_data_u)'>=1000000)
-      {;
-        local size = `r(data_data_u)'/1000000;
-        local size : dis %-9.2f `size';
-        local size = trim("`size'") + " GB";
-      };
-      else
-      {;
-        local size = `r(data_data_u)'/1000;
-        local size : dis %-9.0f `size';
-        local size = trim("`size'") + " MB";
-      };
-
-  *------------------------------------------------------------*
-  *   03. Creating Original Sort Order                         *
-  *------------------------------------------------------------*;
-
-    tempvar sortorder;
-    qui generate `sortorder' = _n;
-
-  *------------------------------------------------------------*
-  *   04. Beginning Export File                                *
+  *   02. Creating Export File                                 *
   *------------------------------------------------------------*;
 
     local export_valid = 0;
 
-    if("`export'"!="")
+    if("`export'" != "")
     {;
       cap qui log using "`export'.smcl", replace;
-      if(_rc!=0)
+      if(_rc != 0)
       {;
-        di "ERROR! File cannot be created!";
+        dis as err "ERROR! File cannot be created!" as text "";
       };
       else
       {;
@@ -90,270 +71,68 @@ syntax [varlist], [EXPort(string) REPLACE];
     };
 
   *------------------------------------------------------------*
-  *   05. Displaying Header                                    *
+  *   03. Displaying Overall Header                            *
   *------------------------------------------------------------*;
 
-    if(`varlistlength'==`vartotal')
-    {;
-      dis;
-      dis "**==================================================================================**";
-      dis "**    Title: `title'"    _col(85) "**";
-      dis "**    Date:  `date'"     _col(85) "**";
-      dis "**    Obs:   `obscount'" _col(85) "**";
-      dis "**    Vars:  `varcount'" _col(85) "**";
-      dis "**    Size:  `size'"     _col(85) "**";
-      dis "**==================================================================================**";
-    };
+      if(`: list sizeof varlist' == `vartotal')
+      {;
+        dis;
+        dis "**" ("=" * 82) "**";
+        dis "**    Title: " "`: data label'"                _col(85) "**";
+        dis "**    Date:  " "`date'"                        _col(85) "**";
+        dis "**    Obs:   " %-9.0fc _N                      _col(85) "**";
+        dis "**    Vars:  " %-9.0fc `: list sizeof varlist' _col(85) "**";
+        dis "**    Size:  " "`size'"                        _col(85) "**";
+        dis "**" ("=" * 82) "**";
+      };
 
   *------------------------------------------------------------*
-  *   06. Displaying Individual Variables                      *
+  *   04. Displaying Individual Variables                      *
   *------------------------------------------------------------*;
 
     foreach var of varlist `varlist'
     {;
-      *--------------------------------------------------------*
-      *   A. Defining Individual Variables                     *
-      *--------------------------------------------------------*;
+      local varlab = substr("`: variable label `var''", 1, 81);
 
-        **  VarType - Variable type  **;
+      dis;
+      dis "+" ("-" * 84) "+";
+      dis "|  `var'"    _col(86) "|";
+      dis "|  `varlab'" _col(86) "|";
+      dis "+" ("-" * 84) "+";
+      dis "|" _col(86) "|";
 
-          local vartype : type `var';
-
-        **  ValLab - Value label name  **;
-
-          local vallab : value label `var';
-
-        **  Fmt - Variable format  **;
-
-          local fmt : format `var';
-
-        **  Uniq - Number of unique values  **;
-
-          tempvar tag;
-          qui bysort `var': generate `tag' = 1 if _n == 1;
-          qui count if `tag' == 1 & !missing(`var');
-          local uniq = r(N);
-
-        **  Miss    - Number of observations with missing values   **;
-        **  MissPct - Percent of observations with missing values  **;
-
-          qui count if missing(`var');
-          local miss = r(N);
-          local misspct = (`miss'/_N)*100;
-
-        **  Min  - Minimum value (only for numeric examples without label)  **;
-        **  Mean - Mean value (only for numeric examples without label)     **;
-        **  Max  - Maximum value (only for numeric examples without label)  **;
-
-          if(inlist("`vartype'","byte","int","long","double"))
-          {;
-            qui summ `var', detail;
-            local min = r(min);
-            local max = r(max);
-            local mean = r(mean);
-            local sdev = r(sd);
-          };
-
-      *--------------------------------------------------------*
-      *   B. Setting Display Formats                           *
-      *--------------------------------------------------------*;
-
-        **  All_Miss - No unique values of variable  **;
-
-          local all_miss = `uniq' == 0;
-
-        **  Uniq - Number of unique values  **;
-
-          local uniq : dis %-9.0fc `uniq';
-          local uniq = trim("`uniq'");
-
-        **  Miss - Number of observations with missing values  **;
-
-          local miss : dis %-9.0fc `miss';
-          local miss = trim("`miss'");
-
-        **  MissPct - Percent of observations with missing values  **;
-
-          local misspct : dis %-9.1f `misspct';
-          local misspct = trim("`misspct'") + "%";
-
-        **  Min  - Minimum value (only for numeric examples without label)  **;
-        **  Mean - Mean value (only for numeric examples without label)     **;
-        **  Max  - Maximum value (only for numeric examples without label)  **;
-
-          if(inlist("`vartype'","byte","int","long","double"))
-          {;
-            if(strpos("`fmt'","%t")==0)
-            {;
-              local min : dis %-9.2f `min';
-              local min = trim("`min'");
-
-              local max : dis %-9.2f `max';
-              local max = trim("`max'");
-
-              local mean : dis %-9.2f `mean';
-              local mean = trim("`mean'");
-
-              local sdev : dis %-9.2f `sdev';
-              local sdev = trim("`sdev'");
-            };
-            else
-            {;
-              local min : dis %td `min';
-              local min = trim("`min'");
-
-              local max : dis %td `max';
-              local max = trim("`max'");
-
-              local mean : dis %td `mean';
-              local mean = trim("`mean'");
-
-              local sdev : dis %-9.2f `sdev';
-              local sdev = trim("`sdev'");
-            };
-          };
-
-      *--------------------------------------------------------*
-      *   C. Displaying Variable Header                        *
-      *--------------------------------------------------------*;
-
-        dis;
-        dis "+------------------------------------------------------------------------------------+";
-        dis "|  " "`var'"                      _col(86) "|";
-        dis "|  " `"`: variable label `var''"' _col(86) "|";
-        dis "+------------------------------------------------------------------------------------+";
-        dis "|" _col(86) "|";
-
-      *--------------------------------------------------------*
-      *   D1. Displaying Info for String                       *
-      *--------------------------------------------------------*;
-
-        if(strpos("`vartype'","str")==1)
+      if(strpos("`: type `var''", "str") == 1)
+      {;
+        varString `var';
+      };
+      else
+      {;
+        if("`: value label `var''" == "")
         {;
-          dis "|     type: string (`vartype')" _col(86) "|";
-          dis "|   unique: `uniq'"             _col(86) "|";
-          dis "|  missing: `miss' (`misspct')" _col(86) "|";
-          dis "|"                              _col(86) "|";
+          varNumeric `var';
         };
-
-      *--------------------------------------------------------*
-      *   D2. Displaying Info for Numeric without Label        *
-      *--------------------------------------------------------*;
-
-        if(strpos("`vartype'","str")!=1 & "`vallab'" == "")
+        else
         {;
-          dis "|     type:  `vartype'"          _col(86) "|";
-          dis "|   unique:  `uniq'"             _col(86) "|";
-          dis "|  missing:  `miss' (`misspct')" _col(86) "|";
-          dis "|"                               _col(86) "|";
-          dis "|    range:  [`min',`max']"      _col(86) "|";
-          dis "|"                               _col(86) "|";
-          dis "|     mean:  `mean'"             _col(86) "|";
-          dis "|     sdev:  `sdev'"             _col(86) "|";
-          dis "|"                               _col(86) "|";
+          varNumericLabel `var';
         };
+      };
 
-      *--------------------------------------------------------*
-      *   D3. Displaying Info for Numeric with Label           *
-      *--------------------------------------------------------*;
-
-        if(strpos("`vartype'","str")!=1 & "`vallab'" != "")
-        {;
-          dis "|     type:  `vartype'"          _col(86) "|";
-          dis "|   unique:  `uniq'"             _col(86) "|";
-          dis "|  missing:  `miss' (`misspct')" _col(86) "|";
-          dis "|"                               _col(86) "|";
-
-          /* Running Tabl */
-
-          if(`all_miss'==0)
-          {;
-            **  Freq - Frequency of value  **;
-            **  Code - Value               **;
-
-              tempname freq code;
-              qui tab `var', matcell(`freq') matrow(`code');
-
-            **  Len - Max length of value label  **;
-            **  CI  - Code of value `i'          **;
-            **  LI  - Value label of value `i'   **;
-
-              local len = 15;
-              local i = 1;
-
-              while `i' <= rowsof(`freq')
-              {;
-                local ci = `code'[`i',1];
-                local li : label (`var') `ci';
-                local len = max(`len',length(`"`li'"'));
-                local i = `i' + 1;
-              };
-
-              if(`len'>62)
-              {;
-                local len = 62;
-              };
-
-            **  Display header for Tabl  **;
-
-              local col1 = `len'+4;
-              local col2 = `len'+1;
-
-              dis "|  " in gr _col(`col1')     "   code  |   freq"  _col(86) "|";
-              dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) "|";
-
-            **  Displaying unique line for each unique value of variable  **;
-
-              local i = 1;
-              while `i' <= rowsof(`freq')
-              {;
-                local ci = `code'[`i',1];
-                local li : label (`var') `ci';
-                local li = substr("`li'",1,62);
-                dis "|  " in gr %`len's `"`li'"' _col(`col1') %6.0f `ci' "   |" in ye %7.0f `freq'[`i',1] _col(86) "|";
-                local i = `i' + 1;
-              };
-
-            **  Displaying missing value line for variable  **;
-
-              qui count if (`var'==.);
-              if r(N) > 0
-              {;
-                dis "|  " in gr _dup(`col2') "-" "--------+--------" _col(86) "|";
-                dis "|  " in gr %`len's "<missing value>" _col(`col1') "     .   |" in ye %7.0f r(N) _col(86) "|";
-              };
-
-            **  Displaying total observations line for variable  **;
-            **  Displaying footer for Tabl                       **;
-
-              dis "|  " in gr _dup(`col2') "-" "--------+--------" _col(86) "|";
-              dis "|  " in gr _col(`col1') " Total   |" in ye %7.0f = `=_N' _col(86) "|";
-              dis "|" _col(86) "|";
-          };
-        };
-
-      *--------------------------------------------------------*
-      *   E. Displaying Footer                                 *
-      *--------------------------------------------------------*;
-
-        dis "+------------------------------------------------------------------------------------+";
     };
 
   *------------------------------------------------------------*
-  *   07. Closing Export File                                  *
+  *   05. Closing Export File                                  *
   *------------------------------------------------------------*;
 
-    if(`export_valid'==1)
+    if(`export_valid' == 1)
     {;
       qui log close;
-      di "`replace'";
 
-      if("`replace'"=="")
+      if("`replace'" == "")
       {;
         cap qui translate "`export'.smcl" "`export'.pdf";
         if(_rc!=0)
         {;
-          di "ERROR! File already exists!";
+          di as err "ERROR! File already exists!" as text "";
         };
       };
       else
@@ -364,4 +143,226 @@ syntax [varlist], [EXPort(string) REPLACE];
       qui erase "`export'.smcl";
     };
 
-end;
+  end;
+
+**======================================================================**
+**   Subroutine: varString                                              **
+**======================================================================**;
+
+  program define varString, rclass;
+  syntax varname;
+
+  *------------------------------------------------------------*
+  *   01. Getting Information                                  *
+  *------------------------------------------------------------*;
+
+    /* Unique */
+
+      tempvar tag;
+      qui bysort `varlist': generate `tag' = 1 if _n == 1;
+      qui count if `tag' == 1 & !missing(`varlist');
+      local unique = r(N);
+
+      local unique : dis %9.0fc `unique';
+      local unique = trim("`unique'");
+
+    /* Missing */
+
+      qui count if missing(`varlist');
+      local missing = r(N);
+      local misspct = (`missing'/_N) * 100;
+
+      local missing : dis %9.0fc `missing';
+      local missing = trim("`missing'");
+
+      local misspct : dis %9.1f `misspct';
+      local misspct = trim("`misspct'");
+
+  *------------------------------------------------------------*
+  *   02. Displaying Information                               *
+  *------------------------------------------------------------*;
+
+    dis "|     type:  string (`: type `varlist'')" _col(86) "|";
+    dis "|   unique:  `unique'"                    _col(86) "|";
+    dis "|  missing:  `missing' (`misspct'%)"      _col(86) "|";
+    dis "|"                                        _col(86) "|";
+    dis "+" ("-" * 84) "+";
+
+  end;
+
+**======================================================================**
+**   Subroutine: varNumeric                                             **
+**======================================================================**;
+
+  program define varNumeric, rclass;
+  syntax varname;
+
+  *------------------------------------------------------------*
+  *   01. Getting Information                                  *
+  *------------------------------------------------------------*;
+
+    /* Unique */
+
+      tempvar tag;
+      qui bysort `varlist': generate `tag' = 1 if _n == 1;
+      qui count if `tag' == 1 & !missing(`varlist');
+      local unique = r(N);
+
+      local unique : dis %9.0fc `unique';
+      local unique = trim("`unique'");
+
+    /* Missing */
+
+      qui count if missing(`varlist');
+      local missing = r(N);
+      local misspct = (`missing'/_N) * 100;
+
+      local missing : dis %9.0fc `missing';
+      local missing = trim("`missing'");
+
+      local misspct : dis %9.1f `misspct';
+      local misspct = trim("`misspct'");
+
+    /* Summary Statistics */
+
+      qui summ `var';
+
+      local min : dis %9.2f r(min);
+      local min = trim("`min'");
+
+      local max : dis %9.2f r(max);
+      local max = trim("`max'");
+
+      local mean : dis %9.2f r(mean);
+      local mean = trim("`mean'");
+
+      local sdev : dis %9.2f r(sd);
+      local sdev = trim("`sdev'");
+
+  *------------------------------------------------------------*
+  *   02. Displaying Information                               *
+  *------------------------------------------------------------*;
+
+    dis "|     type:  `: type `varlist''"     _col(86) "|";
+    dis "|   unique:  `unique'"               _col(86) "|";
+    dis "|  missing:  `missing' (`misspct'%)" _col(86) "|";
+    dis "|"                                   _col(86) "|";
+    dis "|    range:  [`min',`max']"          _col(86) "|";
+    dis "|"                                   _col(86) "|";
+    dis "|     mean:  `mean'"                 _col(86) "|";
+    dis "|     sdev:  `sdev'"                 _col(86) "|";
+    dis "|"                                   _col(86) "|";
+    dis "+" ("-" * 84) "+";
+
+  end;
+
+**======================================================================**
+**   Subroutine: varNumericLabel                                        **
+**======================================================================**;
+
+  program define varNumericLabel, rclass;
+  syntax varname;
+
+  *------------------------------------------------------------*
+  *   01. Getting Information                                  *
+  *------------------------------------------------------------*;
+
+    /* Unique */
+
+      tempvar tag;
+      qui bysort `varlist': generate `tag' = 1 if _n == 1;
+      qui count if `tag' == 1 & !missing(`varlist');
+      local unique = r(N);
+
+      local unique : dis %9.0fc `unique';
+      local unique = trim("`unique'");
+
+    /* Missing */
+
+      qui count if missing(`varlist');
+      local missing = r(N);
+      local misspct = (`missing'/_N) * 100;
+
+      local missing : dis %9.0fc `missing';
+      local missing = trim("`missing'");
+
+      local misspct : dis %9.1f `misspct';
+      local misspct = trim("`misspct'");
+
+  *------------------------------------------------------------*
+  *   02. Displaying Information                               *
+  *------------------------------------------------------------*;
+
+    dis "|     type:  `: type `varlist''"     _col(86) "|";
+    dis "|   unique:  `unique'"               _col(86) "|";
+    dis "|  missing:  `missing' (`misspct'%)" _col(86) "|";
+    dis "|"                                   _col(86) "|";
+
+  *------------------------------------------------------------*
+  *   03. Displaying Table                                     *
+  *------------------------------------------------------------*;
+
+    tempname freqs;
+    qui levelsof `varlist', local(lvls) matcell(`freqs') matrow(`freqs');
+
+    if("`lvls'" != "")
+    {;
+      /* Getting Label Length */
+
+        local lab_len = 15;
+        foreach i of local lvls
+        {;
+          local lab_len = max(`lab_len', length("`i' - `: label (`varlist') `i''"));
+        };
+        local lab_len = cond(`lab_len' > 62, 62, `lab_len');
+
+        local col1 = `lab_len' + 4;
+        local col2 = `lab_len' + 1;
+
+      /* Displaying Table Header */
+
+        dis "|  " in gr _col(`col1')     "   code  |   freq"  _col(86) in ye "|";
+        dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) in ye "|";
+
+      /* Displaying Lines for Labels */
+
+        foreach i of local lvls
+        {;
+          qui count if `varlist' == `i';
+          local freq = r(N);
+          local vallab = substr("`i' - `: label (`varlist') `i''", 1, `lab_len');
+          local colpos = `lab_len' + 11 - length("`vallab'");
+
+          dis "|  " in gr _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) in ye "|";
+        };
+
+      /* Displaying Missing */
+
+        dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) in ye "|";
+
+        qui count if missing(`varlist');
+        local freq = r(N);
+        local vallab = "<missing>";
+        local colpos = `lab_len' + 11 - length("`vallab'");
+
+        dis "|  " in gr _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) in ye "|";
+
+      /* Displaying Total */
+
+        dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) in ye "|";
+
+        local freq = _N;
+        local vallab = "Total";
+        local colpos = `lab_len' + 11 - length("`vallab'");
+
+        dis "|  " in gr _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) in ye "|";
+        dis "|"                                             _col(86) "|";
+    };
+
+  *------------------------------------------------------------*
+  *   04. Displaying Footer                                    *
+  *------------------------------------------------------------*;
+
+    dis "+" ("-" * 84) "+";
+
+  end;
