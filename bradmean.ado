@@ -4,8 +4,8 @@
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.3.4                                                **
-**   Date:         01/05/2018                                           **
+**   Version:      1.3.5                                                **
+**   Date:         01/09/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -34,19 +34,20 @@ end;
 program define bradmean, rclass sortpreserve;
 syntax varlist(numeric) [if] [in],
   [
-    SVY                     /* gen: turn on               */
-    SUBpop(varname numeric) /* gen: subpop                */
-    OVER(varlist)           /* gen: over()                */
-    LEVEL(cilevel)          /* gen: ci level              */
-    DISopt(string)          /* gen: display stats & order */
-    FORMAT(string)          /* fmt: presets               */
-    noLABS                  /* fmt: no labels             */
-    PCT                     /* fmt: format as pct         */
-    PVALS(string)           /* fmt: pvals                 */
-    ROUND(integer 7)        /* fmt: number of decimals    */
-    TITLE(string)           /* fmt: title                 */
-    TOTAL                   /* fmt: total                 */
-    WIDE                    /* fmt: wide                  */
+    SVY                     /* gen: turn on                   */
+    SUBpop(varname numeric) /* gen: subpop                    */
+    OVER(varlist)           /* gen: over()                    */
+    LEVEL(cilevel)          /* gen: ci level                  */
+    DISopt(string)          /* gen: display stats & order     */
+    noMISS                  /* gen: display over with missing */
+    FORMAT(string)          /* fmt: presets                   */
+    noLABS                  /* fmt: no labels                 */
+    PCT                     /* fmt: format as pct             */
+    PVALS(string)           /* fmt: pvals                     */
+    ROUND(integer 7)        /* fmt: number of decimals        */
+    TITLE(string)           /* fmt: title                     */
+    TOTAL                   /* fmt: total                     */
+    WIDE                    /* fmt: wide                      */
   ];
 
 *--------------------------------------------------------------*
@@ -60,7 +61,52 @@ syntax varlist(numeric) [if] [in],
   };
 
 *--------------------------------------------------------------*
-*   02. Generating `group_var'                                 *
+*   02. Setting Survey Options                                 *
+*--------------------------------------------------------------*;
+
+  /* svy - Error Code */
+
+    if("`svy'" != "" | "`subpop'" != "")
+    {;
+      cap qui svydescribe;
+
+      if(_rc != 0)
+      {;
+        di as err "data not set up for svy, use svyset" as text "";
+        error 119;
+      };
+    };
+
+  /* svy - svy */
+
+    local svy = cond("`svy'" == "", "", "svy: ");
+
+  /* svy - subpop */
+
+    local svy = cond("`subpop'" == "", "`svy'", "svy, subpop(`subpop'): ");
+
+*--------------------------------------------------------------*
+*   03. Marking Sample                                         *
+*--------------------------------------------------------------*;
+
+  tempname touse;
+
+  mark `touse' `if' `in';
+
+  if("`svy'" != "")
+  {;
+    svymarkout `touse';
+  };
+
+  if("`miss'" != "")
+  {;
+    tempvar no_miss;
+    qui egen `no_miss' = rownonmiss(`varlist');
+    local no_miss_if = "if `touse' & `no_miss' != 0";
+  };
+
+*--------------------------------------------------------------*
+*   04. Generating `group_var'                                 *
 *--------------------------------------------------------------*;
 
   local over_count = 1;
@@ -70,10 +116,10 @@ syntax varlist(numeric) [if] [in],
     /* Creating `group_string' & `group_numeric' */
 
       tempvar group_string;
-      qui egen strL `group_string' = concat(`over'), decode p(", ");
+      qui egen strL `group_string' = concat(`over') `no_miss_if', decode p(", ");
 
       tempvar group_numeric;
-      qui egen `group_numeric' = group(`over');
+      qui egen `group_numeric' = group(`over') `no_miss_if';
 
     /* Creating `over_count' */
 
@@ -94,6 +140,7 @@ syntax varlist(numeric) [if] [in],
     /* Setting `opt_over' */
 
       local opt_over = "over(`group_var')";
+      markout `touse' `group_var';
 
     /* Cleaning */
 
@@ -102,7 +149,7 @@ syntax varlist(numeric) [if] [in],
     };
 
 *--------------------------------------------------------------*
-*   03. Translating Format                                     *
+*   05. Translating Format                                     *
 *--------------------------------------------------------------*;
 
   local format = trim(strlower("`format'"));
@@ -130,30 +177,10 @@ syntax varlist(numeric) [if] [in],
       local round  = 7;
       local wide   = "";
     };
+
 *--------------------------------------------------------------*
-*   04. Setting Options                                        *
+*   06. Setting Format Options                                 *
 *--------------------------------------------------------------*;
-
-  /* svy - Error Code */
-
-    if("`svy'" != "" | "`subpop'" != "")
-    {;
-      cap qui svydescribe;
-
-      if(_rc != 0)
-      {;
-        di as err "data not set up for svy, use svyset" as text "";
-        error 119;
-      };
-    };
-
-  /* svy - svy */
-
-    local svy = cond("`svy'" == "", "", "svy: ");
-
-  /* svy - subpop */
-
-    local svy = cond("`subpop'" == "", "`svy'", "svy, subpop(`subpop'): ");
 
   /* fmt - pct */
 
@@ -180,7 +207,7 @@ syntax varlist(numeric) [if] [in],
     local wide = cond(`over_count' == 1, "", "`wide'");
 
 *--------------------------------------------------------------*
-*   05. Setting `disopt'                                       *
+*   07. Setting `disopt'                                       *
 *--------------------------------------------------------------*;
 
   /* Subbing in Shorthand Words */
@@ -226,33 +253,7 @@ syntax varlist(numeric) [if] [in],
     local disopt = subinstr("`disopt'", " ", ",", .);
 
 *--------------------------------------------------------------*
-*   06. Marking Sample                                         *
-*--------------------------------------------------------------*;
-
-  tempname touse;
-
-  mark `touse' `if' `in';
-
-  if("`opt_over'" != "")
-  {;
-    markout `touse' `group_var';
-  };
-
-  if("`svy'" != "")
-  {;
-    svymarkout `touse';
-  };
-
-  if("`subpop'" != "")
-  {;
-    tempvar in_subpop;
-    qui generate `in_subpop' = `subpop';
-    qui replace  `in_subpop' = . if `subpop' != 1;
-    markout `touse' `in_subpop';
-  };
-
-*--------------------------------------------------------------*
-*   07. Creating Results                                       *
+*   08. Creating Results                                       *
 *--------------------------------------------------------------*;
 
   tempname var_original;
@@ -272,14 +273,14 @@ syntax varlist(numeric) [if] [in],
 
     /* Calculating - Over */
 
-      calculateResults `var', sample(`touse') svy(`svy') `opt_over' level(`level') round(`round') pct(`pct') pvals(`pvals');
+      calculateResults `var', sample(`touse') svy(`svy') subpop(`subpop') `opt_over' level(`level') round(`round') pct(`pct') pvals(`pvals');
       matrix `var_original' = r(results);
 
     /* Calculating - Total */
 
       if("`total'" != "")
       {;
-        calculateResults `var', sample(`touse') svy(`svy') `opt_over' `total' level(`level') round(`round') pct(`pct') pvals(`pvals');
+        calculateResults `var', sample(`touse') svy(`svy') subpop(`subpop') `opt_over' `total' level(`level') round(`round') pct(`pct') pvals(`pvals');
         matrix `var_original' = `var_original' \ r(results);
       };
 
@@ -338,7 +339,7 @@ syntax varlist(numeric) [if] [in],
   };
 
 *--------------------------------------------------------------*
-*   08. Preparing General Row & Column Specs                   *
+*   09. Preparing General Row & Column Specs                   *
 *--------------------------------------------------------------*;
 
   /* Stat Names */
@@ -422,7 +423,7 @@ syntax varlist(numeric) [if] [in],
     local colformats = subinword("`colformats'", "8", "%9.0g", .);
 
 *--------------------------------------------------------------*
-*   09. Applying Row & Column Specs                            *
+*   10. Applying Row & Column Specs                            *
 *--------------------------------------------------------------*;
 
   /* Long */
@@ -500,7 +501,7 @@ syntax varlist(numeric) [if] [in],
     matrix roweq    `total_final' = `roweqs';
 
 *--------------------------------------------------------------*
-*   10. Displaying Results                                     *
+*   11. Displaying Results                                     *
 *--------------------------------------------------------------*;
 
   /* Title */
@@ -532,7 +533,7 @@ syntax varlist(numeric) [if] [in],
                            showcoleq(combined);
 
 *--------------------------------------------------------------*
-*   11. Returning Results & Resetting Changes                  *
+*   12. Returning Results & Resetting Changes                  *
 *--------------------------------------------------------------*;
 
   return matrix results = `total_final';
@@ -549,6 +550,7 @@ syntax varname(numeric),
   SAMPLE(varname numeric)
   [
     SVY(string)
+    SUBPOP(string)
     OVER(varname numeric)
     TOTAL
     LEVEL(cilevel)
@@ -590,6 +592,10 @@ syntax varname(numeric),
       local over_count = 1;
       local opt_over = "";
     };
+
+  /* Subpop */
+
+    local in_subpop = cond("`subpop'" == "", "", "& `subpop' == 1");
 
 *--------------------------------------------------------------*
 *   02. Getting Mean & SD Estimates                            *
@@ -639,12 +645,12 @@ syntax varname(numeric),
 
       if(`over_count' == 1)
       {;
-        qui count if `sample' & `varlist' & !missing(`varlist');
+        qui count if `sample' & `varlist' & !missing(`varlist') `in_subpop';
         local n_yes = r(N);
       };
       else
       {;
-        qui count if `sample' & `varlist' & !missing(`varlist') & `over' == `i';
+        qui count if `sample' & `varlist' & !missing(`varlist') & `over' == `i' `in_subpop';
         local n_yes = r(N);
       };
 

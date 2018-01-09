@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.3.4  05nov2018}{...}
+{* *! version 1.3.5  09jan2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -29,6 +29,7 @@
 {synopt:{cmd:over(}{it:{help varlist}}{cmd:)}}estimation over groups defined by {it:varlist}{p_end}
 {synopt:{opt level(#):}}set confidence level; default is {bf:level(95)}{p_end}
 {synopt:{cmd:disopt(}{it:{help (strings:string}}{cmd:)}}select which statistics will be displayed and in what order{p_end}
+{synopt:{opt nomiss:}}categories of over where all variables are missing will not be shown{p_end}
 
 {syntab:Format}
 {synopt:{cmd:format(}{it:{help (strings:string}}{cmd:)}}allows pre-defined format options{p_end}
@@ -87,6 +88,9 @@ default for {bf:long} is {cmd:disopt(obs n_yes mean sd ci)}
 {pmore}
 default for {bf:wide} is {cmd:disopt(mean)}
 {p_end}
+
+{phang}
+{opt nomiss} specifies that categories of over where all variables are missing will not be shown.
 
 {dlgtab:Format}
 
