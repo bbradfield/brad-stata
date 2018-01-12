@@ -443,7 +443,7 @@ syntax varlist(numeric) [if] [in],
       local colformats = "`colformats'" + cond("`pvals'" == "none", " &", " |" + (" %5.4f &" * `: list sizeof pnames'));
 
       ** rownames **;
-      local rownames = cond("`over'" == "", "`varlist'", cond(`lab_len' > (`stat_count' * 9), `"`overnames_short'"', `"`overnames_long'"') * `: list sizeof varlist');
+      local rownames = cond("`over'" == "", "`varlist'", cond(`lab_len' > 32, `"`overnames_short'"', `"`overnames_long'"') * `: list sizeof varlist');
 
       ** roweqs **;
       foreach var of varlist `varlist'
@@ -467,7 +467,7 @@ syntax varlist(numeric) [if] [in],
       local colnames = trim(itrim((`" `statnames' "' * `group_count') + `" `pnames' "'));
 
       ** coleqs **;
-      local overnames_temp = cond(`lab_len' > 32, `"`overnames_short'"', `"`overnames_long'"');
+      local overnames_temp = cond(`lab_len' > (`stat_count' * 9), `"`overnames_short'"', `"`overnames_long'"');
       foreach word of local overnames_temp
       {;
         local temp_name = `" "`word'" "' * `stat_count';
