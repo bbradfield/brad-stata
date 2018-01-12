@@ -387,7 +387,7 @@ syntax varlist(numeric) [if] [in],
 
   /* Over Names */
 
-    local lab_len = 14;
+    local lab_len = 9;
 
     if("`opt_over'" != "")
     {;
@@ -397,7 +397,7 @@ syntax varlist(numeric) [if] [in],
         local overnames_long  = `" `overnames_long' "`temp_name'" "';
         local overnames_short = `" `overnames_short' "_over_`i'" "';
 
-        local lab_len = cond(length("`temp_name'") >= `lab_len', length("`temp_name'") + 1, `lab_len');
+        local lab_len = cond(length("`temp_name'") > `lab_len', length("`temp_name'"), `lab_len');
       };
 
       if("`total'" != "")
