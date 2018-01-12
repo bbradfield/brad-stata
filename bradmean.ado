@@ -4,8 +4,8 @@
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.3.5                                                **
-**   Date:         01/09/2018                                           **
+**   Version:      1.3.6                                                **
+**   Date:         01/12/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -431,24 +431,24 @@ syntax varlist(numeric) [if] [in],
     if("`wide'" == "")
     {;
       ** dis_len **;
-      local dis_len = cond(`lab_len' > `dis_len', cond(`lab_len' > 30, `dis_len', `lab_len'), `dis_len');
+      local dis_len = cond(`lab_len' > `dis_len', cond(`lab_len' > 32, `dis_len', `lab_len'), `dis_len');
 
       ** colnames **;
       local colnames = trim(itrim(`" `statnames' `pnames' "'));
 
       ** coleqs **;
-      local coleqs = ("_: " * `stat_count') + ("P_Vals: " * `: list sizeof pnames');
+      local coleqs = ("_: " * `stat_count') + ("P_Vals " * `: list sizeof pnames');
 
       ** colformats **;
       local colformats = "`colformats'" + cond("`pvals'" == "none", " &", " |" + (" %5.4f &" * `: list sizeof pnames'));
 
       ** rownames **;
-      local rownames = cond("`over'" == "", "`varlist'", cond(`lab_len' > 30, `"`overnames_short'"', `"`overnames_long'"') * `: list sizeof varlist');
+      local rownames = cond("`over'" == "", "`varlist'", cond(`lab_len' > 32, `"`overnames_short'"', `"`overnames_long'"') * `: list sizeof varlist');
 
       ** roweqs **;
       foreach var of varlist `varlist'
       {;
-        local roweqs = "`roweqs' " + cond("`over'" == "", "_: ", ("`var': " * `group_count'));
+        local roweqs = "`roweqs' " + cond("`over'" == "", "_: ", ("`var' " * `group_count'));
       };
 
       ** rowformats **;
@@ -470,10 +470,10 @@ syntax varlist(numeric) [if] [in],
       local overnames_temp = cond(`lab_len' > 9, `"`overnames_short'"', `"`overnames_long'"');
       foreach word of local overnames_temp
       {;
-        local temp_name = `" "`word':" "' * `stat_count';
+        local temp_name = `" "`word'" "' * `stat_count';
         local coleqs = trim(itrim(`" `coleqs' `temp_name' "'));
       };
-      local temp_name = `" "P_Vals:" "' * `: list sizeof pnames';
+      local temp_name = `" "P_Vals" "' * `: list sizeof pnames';
       local coleqs = trim(itrim(`" `coleqs' `temp_name' "'));
 
       ** colformats **;
