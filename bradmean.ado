@@ -467,7 +467,7 @@ syntax varlist(numeric) [if] [in],
       local colnames = trim(itrim((`" `statnames' "' * `group_count') + `" `pnames' "'));
 
       ** coleqs **;
-      local overnames_temp = cond(`lab_len' > (`stat_count' * 9), `"`overnames_short'"', `"`overnames_long'"');
+      local overnames_temp = cond((`lab_len' > (`stat_count' * 9)) | (`lab_len' > 32), `"`overnames_short'"', `"`overnames_long'"');
       foreach word of local overnames_temp
       {;
         local temp_name = `" "`word'" "' * `stat_count';
