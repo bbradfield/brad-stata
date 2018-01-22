@@ -5,7 +5,7 @@ Stata packages developed by bbradfield for Stata14+
 | Package Name | Version | Date     | Description                                           |
 |:-------------|:-------:|:--------:|:------------------------------------------------------|
 | bradsuite    | N/A     | 11/16/17 | Installs all the following brad commands at once      |
-| bradbook     | 1.0.1   | 01/05/18 | Creates a cleaner codebook for export to Word         |
+| bradbook     | 1.0.2   | 01/22/18 | Creates a cleaner codebook for export to Word         |
 | bradmean     | 1.3.6   | 01/12/18 | Computes multiple independent means in a single table |
 
 

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.1  05jan2018}{...}
+{* *! version 1.0.2  22jan2018}{...}
 {vieweralsosee "[R] codebook" "help codebook"}{...}
 {title:Title}
 
