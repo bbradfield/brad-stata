@@ -321,8 +321,8 @@ version 14.0
 
       /* Displaying Table Header */
 
-        dis "|  " in gr _col(`col1')     "   code  |   freq"  _col(86) in ye "|";
-        dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) in ye "|";
+        dis "|  " _col(`col1')     "   code  |   freq"  _col(86) "|";
+        dis "|  " _dup(`col2') "-"  "--------+--------" _col(86) "|";
 
       /* Displaying Lines for Labels */
 
@@ -333,29 +333,29 @@ version 14.0
           local vallab = substr("`i' - `: label (`varlist') `i''", 1, `lab_len');
           local colpos = `lab_len' + 11 - length("`vallab'");
 
-          dis "|  " in gr _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) in ye "|";
+          dis "|  " _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) "|";
         };
 
       /* Displaying Missing */
 
-        dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) in ye "|";
+        dis "|  " _dup(`col2') "-"  "--------+--------" _col(86) "|";
 
         qui count if missing(`varlist');
         local freq = r(N);
         local vallab = "<missing>";
         local colpos = `lab_len' + 11 - length("`vallab'");
 
-        dis "|  " in gr _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) in ye "|";
+        dis "|  " _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) "|";
 
       /* Displaying Total */
 
-        dis "|  " in gr _dup(`col2') "-"  "--------+--------" _col(86) in ye "|";
+        dis "|  " _dup(`col2') "-"  "--------+--------" _col(86) "|";
 
         local freq = _N;
         local vallab = "Total";
         local colpos = `lab_len' + 11 - length("`vallab'");
 
-        dis "|  " in gr _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) in ye "|";
+        dis "|  " _col(`colpos') "`vallab'  |" %7.0f `freq' _col(86) "|";
         dis "|"                                             _col(86) "|";
     };
 
