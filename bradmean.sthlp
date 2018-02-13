@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.3.6  12jan2018}{...}
+{* *! version 1.3.7  13feb2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -34,12 +34,16 @@
 {syntab:Format}
 {synopt:{cmd:format(}{it:{help (strings:string}}{cmd:)}}allows pre-defined format options{p_end}
 {synopt:{opt nolabs:}}turn off group labels{p_end}
+{synopt:{opt nolegend:}}turn off group legend{p_end}
+{synopt:{cmd:mtest(}{it:{help (strings:string}}{cmd:)}}adjust p-values for multiple comparisons{p_end}
 {synopt:{opt pct:}}displays results as percentage (multiplied by 100){p_end}
 {synopt:{cmd:pvals(}{it:{help (strings:string}}{cmd:)}}select which type of p-values to be displayed{p_end}
 {synopt:{opt round(#):}}rounds to # decimal places; range 0-7{p_end}
+{synopt:{opt series:}}treat series of variables as a series with unique group labels{p_end}
 {synopt:{cmd:title(}{it:{help (strings:string}}{cmd:)}}title displayed above table{p_end}
 {synopt:{opt total:}}displays total as a group when {bf:over} is specified{p_end}
 {synopt:{opt wide:}}displays in wide format{p_end}
+{synopt:{opt noxilabs:}}do not display labels for xi variables{p_end}
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
@@ -104,22 +108,39 @@ default for {bf:wide} is {cmd:disopt(mean)}
 {opt nolabs} turns off group labels.
 
 {phang}
+{opt nolegend} turns off group legend.
+
+{phang}
+{cmd:mtest(}{it:{help (strings:string}}{cmd:)} adjusts p-values for multiple comparisons using the following methods:
+
+{space 12}{bf:{ul:n}oadjust} {space 2} no adjustment
+{space 12}{bf:{ul:b}onferroni} {space 0} Bonferroni's method
+{space 12}{bf:{ul:h}olm} {space 6} Holm's method
+{space 12}{bf:{ul:s}idak} {space 5} Sidak's method
+
+{phang}
 {opt pct} specifies that statistics will be displayed as percentage (multiplied by 100).
 
 {phang}
-{cmd:pvals(}{it:{help (strings:string}}{cmd:)} specifies which p-values to display, Options are "all", "overall", "individual", "none". Default is "overall".
+{cmd:pvals(}{it:{help (strings:string}}{cmd:)} specifies which p-values to display. Options are "all", "overall", "individual", "none". Default is "overall".
 
 {phang}
 {opt round(#)} rounds statistics to # decimal places (range 0-7).
 
 {phang}
-{cmd:title(}{it:{help (strings:string}}{cmd:)} display specified title above table.
+{opt series} treat series of variables as a series with unique group labels. Series are made of unexpanded wildcards such as F4_* or F4_1-F4_5. Variable labels in the format "{bf:[answer] question}" are required for this option to work.
+
+{phang}
+{cmd:title(}{it:{help (strings:string}}{cmd:)} display specified title above table. Defaults to display {varlist} and label (for single variables or series). If you do not want to display a title, use {bf:title(none)}.
 
 {phang}
 {opt total} displays total as a group when {bf:over} is specified.
 
 {phang}
 {opt wide} specifies that estimates will be output in a wide format (only in cases where {opt over} is specified).
+
+{phang}
+{opt noxilabs} turns off labels for xi variables. Otherwise, bradmean will use the value label to create labels for the indicator variables.
 
 {marker results}{...}
 {title:Stored results}
