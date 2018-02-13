@@ -33,7 +33,7 @@ end
 **   Routine: bradmean                                                  **
 **======================================================================**;
 
-program define bradmean_new, rclass sortpreserve;
+program define bradmean, rclass sortpreserve;
 syntax varlist(numeric) [if] [in],
   [
     SVY                     /* gen: turn on                   */
