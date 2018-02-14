@@ -4,8 +4,8 @@
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.3.7                                                **
-**   Date:         02/13/2018                                           **
+**   Version:      1.3.8                                                **
+**   Date:         02/14/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -798,64 +798,63 @@ syntax varname(numeric),
                             (`results_mean'[5,1...]    ) * `pct' \
                             (`results_mean'[6,1...]    ) * `pct' ;
 
-  /* P-Values */
+  /* P-Values - Overall */
 
-    if(`over_count' > 1)
+    if(inlist("`pvals'", "all", "overall") & `over_count' > 1)
     {;
-      /* Overall */
+      local test_cmd = "[`varlist']" + subinstr("`e(over_namelist)'"," ","=[`varlist']",.);
+      cap qui test `test_cmd';
+      local temp_pval = cond(`n_over' == 1, ., r(p));
+      matrix `results_temp' = `results_temp' \ J(1, `n_over', `temp_pval');
+    };
 
-        if(inlist("`pvals'", "all", "overall"))
+  /* P-Values - Individual */
+
+    if(inlist("`pvals'", "all", "individual") & `over_count' > 1)
+    {;
+      if(`n_over' == 1)
+      {;
+        matrix `results_temp' = `results_temp' \ J(`over_count', `n_over', .);
+      };
+      else
+      {;
+        tempname results_pvals;
+
+        local pos = 1;
+        forvalues i = 1/`over_count'
         {;
-          local test_cmd = "[`varlist']" + subinstr("`e(over_namelist)'"," ","=[`varlist']",.);
-          cap qui test `test_cmd';
-          matrix `results_temp' = `results_temp' \ J(1, `n_over', r(p));
-        };
-        else
-        {;
-          matrix `results_temp' = `results_temp' \ J(1, `n_over', .);
-        };
-
-      /* Individual */
-
-        if(inlist("`pvals'", "all", "individual"))
-        {;
-          tempname results_pvals;
-
-          local pos = 1;
-          forvalues i = 1/`over_count'
+          if("`: word `pos' of `results_overlabs''" == "`i'")
           {;
-            if("`: word `pos' of `results_overlabs''" == "`i'")
+            tempname results_pvals;
+
+            local test_cmd = "[`varlist']`i'=[`varlist']" + subinstr("`e(over_namelist)'", " ", "=[`varlist']", .);
+            cap qui test `test_cmd', mtest(`mtest');
+            if(_rc != 0)
             {;
-              local test_cmd = "[`varlist']`i'=[`varlist']" + subinstr("`e(over_namelist)'", " ", "=[`varlist']", .);
-
-              cap qui test `test_cmd', mtest(`mtest');
-              if(_rc != 0)
-              {;
-                matrix `results_temp' = `results_temp' \ J(1, `n_over', .);
-                local pos = `pos' + 1;
-                continue;
-              };
-
-              matrix `results_pvals' = r(mtest);
-              if("`mtest'" == "noadjust")
-              {;
-                matrix `results_pvals' = `results_pvals'[1...,3]';
-              };
-              else
-              {;
-                matrix `results_pvals' = `results_pvals'[1...,4]';
-              };
-
-              matrix `results_temp'  = `results_temp' \ `results_pvals';
-
+              matrix `results_temp' = `results_temp' \ J(1, `n_over', .);
               local pos = `pos' + 1;
+              continue;
+            };
+
+            matrix `results_pvals' = r(mtest);
+            if("`mtest'" == "noadjust")
+            {;
+              matrix `results_pvals' = `results_pvals'[1...,3]';
             };
             else
             {;
-              matrix `results_temp' = `results_temp' \ J(1, `n_over', .);
+              matrix `results_pvals' = `results_pvals'[1...,4]';
             };
+            matrix `results_temp'  = `results_temp' \ `results_pvals';
+
+            local pos = `pos' + 1;
+          };
+          else
+          {;
+            matrix `results_temp' = `results_temp' \ J(1, `n_over', .);
           };
         };
+      };
     };
 
 *--------------------------------------------------------------*
