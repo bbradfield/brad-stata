@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.3.8  14feb2018}{...}
+{* *! version 1.3.8  15feb2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -38,6 +38,7 @@
 {synopt:{cmd:mtest(}{it:{help (strings:string}}{cmd:)}}adjust p-values for multiple comparisons{p_end}
 {synopt:{opt pct:}}displays results as percentage (multiplied by 100){p_end}
 {synopt:{cmd:pvals(}{it:{help (strings:string}}{cmd:)}}select which type of p-values to be displayed{p_end}
+{synopt:{opt right:}}right-aligns results{p_end}
 {synopt:{opt round(#):}}rounds to # decimal places; range 0-7{p_end}
 {synopt:{opt series:}}treat series of variables as a series with unique group labels{p_end}
 {synopt:{cmd:title(}{it:{help (strings:string}}{cmd:)}}title displayed above table{p_end}
@@ -123,6 +124,9 @@ default for {bf:wide} is {cmd:disopt(mean)}
 
 {phang}
 {cmd:pvals(}{it:{help (strings:string}}{cmd:)} specifies which p-values to display. Options are "all", "overall", "individual", "none". Default is "overall".
+
+{phang}
+{opt right} right-aligns results.
 
 {phang}
 {opt round(#)} rounds statistics to # decimal places (range 0-7).

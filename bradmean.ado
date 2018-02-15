@@ -5,7 +5,7 @@
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
 **   Version:      1.3.8                                                **
-**   Date:         02/14/2018                                           **
+**   Date:         02/15/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -48,6 +48,7 @@ syntax varlist(numeric) [if] [in],
     MTEST(string)           /* fmt: multiple comparisons type */
     PCT                     /* fmt: format as pct             */
     PVALS(string)           /* fmt: pvals                     */
+    RIGHT                   /* fmt: align right               */
     ROUND(integer 7)        /* fmt: number of decimals        */
     SERIES                  /* fmt: check for series          */
     TITLE(string)           /* fmt: title                     */
@@ -192,6 +193,11 @@ syntax varlist(numeric) [if] [in],
 *--------------------------------------------------------------*;
 
   local dis_len = 14;
+
+  /* fmt - align */
+
+    local align_dis = cond("`right'" == "", "-", "");
+    local align_col = cond("`right'" == "", "l", "r");
 
   /* fmt - pct */
 
@@ -341,14 +347,14 @@ syntax varlist(numeric) [if] [in],
   /* Column Formats */
 
     local colformats = subinstr("`disopt'", ",", " & ", .);
-    local colformats = subinword("`colformats'", "1", "%9.0fc", .);
-    local colformats = subinword("`colformats'", "2", "%9.0fc", .);
-    local colformats = subinword("`colformats'", "3", "%9.0g", .);
-    local colformats = subinword("`colformats'", "4", "%9.0g", .);
-    local colformats = subinword("`colformats'", "5", "%9.0g", .);
-    local colformats = subinword("`colformats'", "6", "%9.0g", .);
-    local colformats = subinword("`colformats'", "7", "%9.0g", .);
-    local colformats = subinword("`colformats'", "8", "%9.0g", .);
+    local colformats = subinword("`colformats'", "1", "%`align_dis'9.0fc", .);
+    local colformats = subinword("`colformats'", "2", "%`align_dis'9.0fc", .);
+    local colformats = subinword("`colformats'", "3", "%`align_dis'9.0g", .);
+    local colformats = subinword("`colformats'", "4", "%`align_dis'9.0g", .);
+    local colformats = subinword("`colformats'", "5", "%`align_dis'9.0g", .);
+    local colformats = subinword("`colformats'", "6", "%`align_dis'9.0g", .);
+    local colformats = subinword("`colformats'", "7", "%`align_dis'9.0g", .);
+    local colformats = subinword("`colformats'", "8", "%`align_dis'9.0g", .);
 
   /* P Names - Overall */
 
@@ -679,7 +685,8 @@ syntax varlist(numeric) [if] [in],
 
     matlist `total_final', cspec(`colformats')
                            rspec(`rowformats')
-                           showcoleq(combined);
+                           showcoleq(combined)
+                           aligncolnames(`align_col');
 
 *--------------------------------------------------------------*
 *   12. Returning Results & Resetting Changes                  *
