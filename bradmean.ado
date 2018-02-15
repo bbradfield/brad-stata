@@ -807,12 +807,15 @@ syntax varname(numeric),
 
   /* P-Values - Overall */
 
-    if(inlist("`pvals'", "all", "overall") & `over_count' > 1)
+    if(inlist("`pvals'", "all", "overall") & `over_count' > 1 & `n_over' > 1)
     {;
       local test_cmd = "[`varlist']" + subinstr("`e(over_namelist)'"," ","=[`varlist']",.);
       cap qui test `test_cmd';
-      local temp_pval = cond(`n_over' == 1, ., r(p));
-      matrix `results_temp' = `results_temp' \ J(1, `n_over', `temp_pval');
+      matrix `results_temp' = `results_temp' \ J(1, `n_over', r(p));
+    };
+    else
+    {;
+      matrix `results_temp' = `results_temp' \ J(1, `n_over', .);
     };
 
   /* P-Values - Individual */
