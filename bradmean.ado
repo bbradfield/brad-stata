@@ -5,7 +5,7 @@
 **   Purpose:      Running multiple means in a single function          **
 **   Programmers:  Brian Bradfield                                      **
 **   Version:      1.3.8                                                **
-**   Date:         02/15/2018                                           **
+**   Date:         02/16/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**
@@ -224,55 +224,6 @@ syntax varlist(numeric) [if] [in],
   /* fmt - round */
 
     local round = cond(inrange(`round', 0, 7), 1/(10^`round'), 1/(10^7));
-
-  /* fmt - title */
-
-    local xiprefix : char _dta[__xi__Vars__Prefix__];
-    local xiprefix : word 1 of `xiprefix';
-    local xiprefix = cond("`xiprefix'" == "", "_I", "`xiprefix'");
-
-    ** Default Title **;
-    if(trim("`title'") == "")
-    {;
-      ** 1 Variable **;
-      if(`: word count `varlist'' == 1)
-      {;
-        local title = "`varlist' - `: variable label `varlist''";
-      };
-      ** Multiple Variables **;
-      else
-      {;
-        ** 1 Series **;
-        if(`: word count `input_list'' == 1 & strpos("`input_list'", "`xiprefix'") != 1 & "`series'" != "")
-        {;
-          foreach var of varlist `varlist'
-          {;
-            local temp_title = "`: variable label `var''";
-            local temp_title = trim(substr("`temp_title'", strpos("`temp_title'", "]") + 1, .));
-            local title = cond(length("`temp_title'") > length("`title'"), "`temp_title'", "`title'");
-          };
-          local title = "`input_list' - `title'";
-        };
-        ** 1 XI Variable **;
-        if(`: word count `input_list'' == 1 & strpos("`input_list'", "`xiprefix'") == 1)
-        {;
-          local temp_title = word(subinstr("`: variable label `: word 1 of `varlist'''", "==", " ", .), 1);
-          local title = "`temp_title' - `: variable label `temp_title''";
-        };
-      };
-
-      ** If still missing, input_list **;
-      if(trim("`title'") == "")
-      {;
-        local title = subinstr("`input_list'", " ", ", ", .);
-      };
-    };
-
-    ** None Title **;
-    if(trim(lower("`title'")) == "none")
-    {;
-      local title = "";
-    };
 
   /* fmt - total */
 
@@ -501,8 +452,10 @@ syntax varlist(numeric) [if] [in],
 
       unab expanded : `: word `var_pos' of `input_list'';
 
+      local input_term = "`: word `var_pos' of `input_list''";
+
       local is_xi = strpos(" `xivars' ", " `var' ") != 0;
-      local is_series = strpos(" `input_list' ", " `var' ") == 0;
+      local is_series = `: word count `expanded'' > 1 & strpos("`input_term'", "_") != 0;
 
     /* Format - xi */
 
@@ -531,13 +484,32 @@ syntax varlist(numeric) [if] [in],
 
       if(`is_series' == 1 & `is_xi' == 0 & "`series'" != "" & ("`wide'" != "" | "`over'" == ""))
       {;
-        local var_name = substr("`var'", 1, strrpos("`var'", "_") - 1);
-        local var_num  = substr("`var'", strrpos("`var'", "_") + 1, .);
+        if(strpos("`input_term'", "-") != 0)
+        {;
+          local var_name = substr("`var'", 1, strrpos("`var'", "_") - 1);
+          local var_num = substr("`var'", strrpos("`var'", "_") + 1, .);
+        };
+        else
+        {;
+          local last_wild = max(strrpos("`input_term'", "*"), strrpos("`input_term'", "?"));
+
+          local suffix = substr("`input_term'", `last_wild' + 1, .);
+          local prefix = substr("`var'", 1, length("`var'") - length("`suffix'"));
+          local prefix = substr("`prefix'", 1, strrpos("`prefix'", "_"));
+
+          local var_name = substr("`prefix'", 1, length("`prefix'") - 1) + cond("`prefix'" != "" & "`suffix'" != "", "_", "") +  substr("`suffix'", 2, .);
+          local var_num = substr("`var'", length("`prefix'") + 1, length("`var'") - length("`suffix'") - length("`prefix'"));
+        };
+
         local var_lab  = "`: variable label `var''";
         local var_lab  = substr("`var_lab'", strpos("`var_lab'", "[") + 1, strpos("`var_lab'", "]") - strpos("`var_lab'", "[") - 1);
 
         local roweqs     = `" `roweqs' "`var_name':" "';
         local rownames   = cond(length("`var_lab'") >= 32, `" `rownames' "`var_num'" "', `" `rownames' "`var_lab'" "');
+        if(word(`"`roweqs'"', -1) != word(`"`roweqs'"', -2) & !missing(word(`"`roweqs'"', -1),word(`"`roweqs'"', -2)))
+        {;
+          local rowformats = substr("`rowformats'", 1, length("`rowformats'") - 1) + "-";
+        };
         local rowformats = cond("`var'" == word("`expanded'", -1), "`rowformats'-", "`rowformats'&");
 
         local dis_len = cond(length("`var_lab'") > `dis_len' & length("`var_lab'") < 32, length("`var_lab'") + 1, `dis_len');
@@ -576,7 +548,64 @@ syntax varlist(numeric) [if] [in],
   };
 
 *--------------------------------------------------------------*
-*   10. Applying Row & Column Specs                            *
+*   10. Formatting Title                                       *
+*--------------------------------------------------------------*;
+
+  local xiprefix : char _dta[__xi__Vars__Prefix__];
+  local xiprefix : word 1 of `xiprefix';
+  local xiprefix = cond("`xiprefix'" == "", "_I", "`xiprefix'");
+
+  local uniq_rows : list uniq roweqs;
+  local uniq_rows = subinstr(`"`uniq_rows'"', `"""', `""', .);
+  local uniq_rows = subinstr("`uniq_rows'", ":", "", .);
+
+  /* Default Title */
+
+    if(trim("`title'") == "")
+    {;
+      ** 1 Variable **;
+      if(`: word count `varlist'' == 1)
+      {;
+        local title = "`varlist' - `: variable label `varlist''";
+      };
+      ** Multiple Variables **;
+      else
+      {;
+        ** 1 Series **;
+        if(`: word count `uniq_rows'' == 1 & strpos("`input_list'", "`xiprefix'") != 1 & "`series'" != "")
+        {;
+          foreach var of varlist `varlist'
+          {;
+            local temp_title = "`: variable label `var''";
+            local temp_title = trim(substr("`temp_title'", strpos("`temp_title'", "]") + 1, .));
+            local title = cond(length("`temp_title'") > length("`title'"), "`temp_title'", "`title'");
+          };
+          local title = "`uniq_rows' - `title'";
+        };
+        ** 1 XI Variable **;
+        if(`: word count `uniq_rows'' == 1 & strpos("`input_list'", "`xiprefix'") == 1)
+        {;
+          local temp_title = word(subinstr("`: variable label `: word 1 of `varlist'''", "==", " ", .), 1);
+          local title = "`temp_title' - `: variable label `temp_title''";
+        };
+      };
+
+      ** If still missing, input_list **;
+      if(trim("`title'") == "")
+      {;
+        local title = subinstr("`uniq_rows'", " ", ", ", .);
+      };
+    };
+
+  /* No Title */
+
+    if(trim(lower("`title'")) == "none")
+    {;
+      local title = "";
+    };
+
+*--------------------------------------------------------------*
+*   11. Applying Row & Column Specs                            *
 *--------------------------------------------------------------*;
 
   /* Long */

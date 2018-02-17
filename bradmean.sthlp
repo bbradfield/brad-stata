@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.3.8  15feb2018}{...}
+{* *! version 1.3.8  16feb2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -38,7 +38,6 @@
 {synopt:{cmd:mtest(}{it:{help (strings:string}}{cmd:)}}adjust p-values for multiple comparisons{p_end}
 {synopt:{opt pct:}}displays results as percentage (multiplied by 100){p_end}
 {synopt:{cmd:pvals(}{it:{help (strings:string}}{cmd:)}}select which type of p-values to be displayed{p_end}
-{synopt:{opt right:}}right-aligns results{p_end}
 {synopt:{opt round(#):}}rounds to # decimal places; range 0-7{p_end}
 {synopt:{opt series:}}treat series of variables as a series with unique group labels{p_end}
 {synopt:{cmd:title(}{it:{help (strings:string}}{cmd:)}}title displayed above table{p_end}
@@ -126,13 +125,10 @@ default for {bf:wide} is {cmd:disopt(mean)}
 {cmd:pvals(}{it:{help (strings:string}}{cmd:)} specifies which p-values to display. Options are "all", "overall", "individual", "none". Default is "overall".
 
 {phang}
-{opt right} right-aligns results.
-
-{phang}
 {opt round(#)} rounds statistics to # decimal places (range 0-7).
 
 {phang}
-{opt series} treat series of variables as a series with unique group labels. Series are made of unexpanded wildcards such as F4_* or F4_1-F4_5. Variable labels in the format "{bf:[answer] question}" are required for this option to work.
+{opt series} treat series of variables as a series with unique group labels. Series are made up of variables in the form of with the same prefix and a differing identifier. Variable labels in the format "{bf:[answer] question}" are required for this option to work. If you are using a range ("F4_1-F4_5"), the identifier will be after the last "_". If you are using a wildcard, the identifier will be the last wildcard and must be enclosed by underscores ("F4_*" "*_Computer" "F7_*_Computer"). At the moment, series use "_" counting to operate properly so having a wildcard that fills with "_" before the last wildcard can cause issues.
 
 {phang}
 {cmd:title(}{it:{help (strings:string}}{cmd:)} display specified title above table. Defaults to display {varlist} and label (for single variables or series). If you do not want to display a title, use {bf:title(none)}.
