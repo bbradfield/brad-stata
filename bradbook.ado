@@ -5,8 +5,8 @@
 **   Program:      bradbook.ado                                         **
 **   Purpose:      Outputting a better formatted codebook               **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.0.2                                                **
-**   Date:         01/22/2018                                           **
+**   Version:      1.0.3                                                **
+**   Date:         03/13/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -302,8 +302,7 @@ version 14.0
   *   03. Displaying Table                                     *
   *------------------------------------------------------------*;
 
-    tempname freqs;
-    qui levelsof `varlist', local(lvls) matcell(`freqs') matrow(`freqs');
+    qui levelsof `varlist', local(lvls);
 
     if("`lvls'" != "")
     {;
