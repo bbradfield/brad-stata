@@ -83,7 +83,8 @@
 {space 8}{opth mtest(string)}{space 4} choose from {opt b:onferroni}, {opt h:olm}, or {opt s:idak}
 {space 8}{opth star:s(numlist)}{space 3} display up to 3 significance stars for p-values between 0 and 1;
 {space 25} default is 0.05 and 0.01
-{space 8}{opt script:s(#)}{space 7} display significance superscripts for 1 p-value between 0 and 1
+{space 8}{opt script:s(#)}{space 7} display significance superscripts for 1 p-value between 0 and 1;
+{space 25} default is 0.05
 {space 8}{opt force}{space 12} force displayp-values even with significance stars or superscripts
 
 {phang}
@@ -144,6 +145,8 @@ default for {bf:wide} is {cmd:mean}
 
 {pmore}
 For series options to correctly work, variable labels must be in the following format:
+{p_end}
+{pmore}
 {opt [answer] question}
 {p_end}
 
