@@ -1,5 +1,5 @@
 # brad-stata
-Stata packages developed by bbradfield for Stata14+
+Stata packages developed by bbradfield for Stata 15
 
 ## Packages
 | Package Name | Version | Date     | Description                                           |
