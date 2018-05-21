@@ -4804,7 +4804,7 @@ end;
                 {
                   for(j=1; j<=rows(cols); j++)
                   {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_minmax)
+                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_str)
                   }
                 }
             }
