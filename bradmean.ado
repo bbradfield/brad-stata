@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Mata implementation of Bradmean                      **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.4.0                                                **
-**   Date:         05/18/2018                                           **
+**   Version:      1.4.1                                                **
+**   Date:         05/21/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -481,6 +481,21 @@ end;
             }
         }
 
+      /* Cut-off Questions */
+
+        if(max(udstrlen(var_labels)) :== 80)
+        {
+          cutoff = selectindex(udstrlen(var_labels) :== 80)
+          for(i=1; i<=cols(cutoff); i++)
+          {
+            matches = selectindex(strpos(var_questions, var_questions[1,cutoff[1,i]]) :& (udstrlen(var_labels) :!= 80))
+            if(cols(matches) > 0)
+            {
+              var_questions[1,cutoff[1,i]] = var_questions[1,matches[1,1]]
+            }
+          }
+        }
+
       /* Constructing Series */
 
         series_list = select(var_questions, var_types :== "series")
@@ -490,11 +505,17 @@ end;
         {
           series_vars  = select(var_list, var_questions :== series_list[1,i])
           series_index = selectindex(var_questions :== series_list[1,i])
-          series_name  = commonString(series_vars)
 
+          if(cols(series_index) == 1)
+          {
+            var_series[1,series_index[1,1]] = var_list[1,series_index[1,1]]
+            continue
+          }
+
+          series_name  = commonString(series_vars)
           for(j=1; j<=cols(series_index); j++)
           {
-            var_series[1, series_index[1,j]] = series_name
+            var_series[1,series_index[1,j]] = series_name
           }
         }
 
@@ -526,8 +547,8 @@ end;
 
             for(j=1; j<=rows(series_index); j++)
             {
-              var_positions[1,series_index[j,1]] = 1
               var_positions[1,series_index[j,2]] = -1
+              var_positions[1,series_index[j,1]] = 1
             }
           }
         }
