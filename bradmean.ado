@@ -8,7 +8,7 @@ version 14.0
 **   Purpose:      Mata implementation of Bradmean                      **
 **   Programmers:  Brian Bradfield                                      **
 **   Version:      1.4.1                                                **
-**   Date:         05/21/2018                                           **
+**   Date:         06/11/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -1026,8 +1026,13 @@ end;
             if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
             {
               token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              token = strtrim(token)
+              token = strtrim(substr(token, 2, strlen(token) - 2))
+
+              if(substr(token, 1, 1) == `"""' & substr(token, -1, 1) == `"""')
+              {
+                token = strtrim(substr(token, 2, strlen(token) - 2))
+              }
+
               opt.dis_title = token
             }
             continue
@@ -2991,6 +2996,8 @@ end;
           {
             if(max(B.get_sheets() :== input_bd.xl.sheet) == 0) B.add_sheet(input_bd.xl.sheet)
             else B.set_sheet(input_bd.xl.sheet)
+
+            if(input_bd.xl.bookreplace & input_bd.xl.sheet != "Sheet1") B.delete_sheet("Sheet1")
           }
           else
           {
@@ -5210,6 +5217,8 @@ end;
         if(input_bd.opt.dis_title != "")
         {
           title = input_bd.opt.dis_title
+
+
           return(title)
         }
 
