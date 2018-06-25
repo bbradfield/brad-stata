@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Mata implementation of Bradmean                      **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.4.1                                                **
-**   Date:         06/11/2018                                           **
+**   Version:      1.4.2                                                **
+**   Date:         06/25/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -17,7 +17,7 @@ version 14.0
 **   Stata Functions                                                    **
 **======================================================================**;
 
-  program define bradmean, rclass sortpreserve;
+  program define bradmean, rclass sortpreserve byable(recall);
   syntax varlist [if] [in],
     [
       SVY
@@ -54,6 +54,11 @@ version 14.0
       tempvar all_missing;
       qui egen `all_missing' = rowtotal(`varlist'), m;
       markout `touse' `all_missing';
+    };
+
+    if(_by())
+    {;
+      quietly replace `touse' = 0 if `_byindex' != _byindex();
     };
 
   *----------------------------------------------------------*
@@ -107,13 +112,8 @@ version 14.0
   *   04. Setting Parameters & Options (2)                   *
   *----------------------------------------------------------*;
 
-    /* Cleaning Options */
-
-      mata: bd.opt = cleanOptions(bd);
-
-    /* Getting Statistics */
-
-      mata: bd.st = getStats(bd);
+    mata: bd.opt = cleanOptions(bd);
+    mata: bd.st = getStats(bd);
 
   *----------------------------------------------------------*
   *   05. Getting Results                                    *
@@ -263,7 +263,6 @@ end;
       string scalar dis_align
       string scalar dis_title
       real   scalar dis_print
-
     }
 
   /* struct - stats */
@@ -421,14 +420,13 @@ end;
         if(st_local("stringlist") != ".")
         {
           string_list = tokens(st_local("stringlist"))
-          inlist(var_list, string_list)
           var_list = select(var_list, !inlist(var_list, string_list))
         }
 
         if(cols(var_list) == 0)
         {
           printf("{error:0 numeric variables in varlist}\n")
-          exit(error(109))
+          exit(109)
         }
 
       /* Getting Initial Variable Information */
@@ -458,10 +456,16 @@ end;
               curr_label = tokens(subinstr(var_labels[1,i], "==", " "))
 
               var_types[1,i]     = "xi"
-              var_answers[1,i]   = st_vlmap(st_varvaluelabel(curr_label[1,1]), strtoreal(curr_label[1,2]))
+              var_answers[1,i]   = var_labels[1,i]
               var_questions[1,i] = st_varlabel(curr_label[1,1])
               var_series[1,i]    = curr_label[1,1]
               if(input_bd.opt.dis_xivals == 1) var_positions[1,i] = 0
+
+              if(st_varvaluelabel(curr_label[1,1]) != "")
+              {
+                answer = st_vlmap(st_varvaluelabel(curr_label[1,1]), strtoreal(curr_label[1,2]))
+                if(answer != "") var_answers[1,i] = answer
+              }
 
               continue
             }
@@ -575,6 +579,8 @@ end;
             if(input_bd.opt.dis_xivars) display_series[1,i] = var_questions[1,i]
             else                        display_series[1,i] = var_series[1,i]
 
+            if(display_series[1,i] == "") display_series[1,i] = var_series[1,i]
+
             continue
           }
 
@@ -586,11 +592,20 @@ end;
             if(input_bd.opt.dis_seriesvars) display_series[1,i] = var_questions[1,i]
             else                            display_series[1,i] = var_series[1,i]
 
+            if(display_series[1,i] == "") display_series[1,i] = var_series[1,i]
+
             continue
           }
         }
 
         series_count = rows(uniqrows(display_series'))
+
+      /* Cleaning Up */
+
+        var_labels    = usubinstr(var_labels,    "%", "%%", .)
+        var_answers   = usubinstr(var_answers,   "%", "%%", .)
+        var_questions = usubinstr(var_questions, "%", "%%", .)
+        var_series    = usubinstr(var_series,    "%", "%%", .)
 
       /* Placing Values */
 
@@ -746,6 +761,13 @@ end;
 
       opt.survey = st_local("svy") != ""
 
+      if(opt.survey == 1)
+      {
+        stata("cap noi _svy_newrule")
+        stata("local _ec = _rc")
+        if(st_local("_ec") != "0") exit(119)
+      }
+
       return(opt)
     }
 
@@ -767,10 +789,14 @@ end;
         {
           opt.subpop = input_string
           opt.survey = 1
+          stata("cap noi _svy_newrule")
+          stata("local _ec = _rc")
+          if(st_local("_ec") != "0") exit(119)
         }
         else
         {
           printf("{error:Subpop requires a 0/1 variable}\n")
+          exit(119)
         }
 
         st_local("lvls", "")
@@ -817,11 +843,11 @@ end;
 
       while((token = tokenget(t)) != "")
       {
-        if(strpos(token, "all")    == 1) { opt.pval_type  = 2; continue; }
-        if(strpos(token, "ind")  == 1)   { opt.pval_type  = 2; continue; }
-        if(strpos(token, "over") == 1)   { opt.pval_type  = 1; continue; }
-        if(strpos(token, "none")   == 1) { opt.pval_type  = 0; continue; }
-        if(strpos(token, "force")  == 1) { opt.pval_force = 1; continue; }
+        if(strpos(token, "all")   == 1) { opt.pval_type  = 2; continue; }
+        if(strpos(token, "ind")   == 1) { opt.pval_type  = 2; continue; }
+        if(strpos(token, "over")  == 1) { opt.pval_type  = 1; continue; }
+        if(strpos(token, "none")  == 1) { opt.pval_type  = 0; continue; }
+        if(strpos(token, "force") == 1) { opt.pval_force = 1; continue; }
 
         /* mtest */
 
@@ -1152,6 +1178,17 @@ end;
           opt.dis_footer = 0
         }
 
+      /* Print */
+
+        if(input_bd.xl.output == 0)
+        {
+          opt.dis_print = 1
+        }
+
+      /* Title */
+
+        opt.dis_title = getTitle(input_bd)
+
       return(opt)
     }
 
@@ -1199,86 +1236,24 @@ end;
 
       /* Processing */
 
-        st.name_short = ""
-        st.name_long  = ""
+        name_short = ("obs", "mean", "nyes", "se", "ci", "lci", "uci", "sd", "var", "min", "max")
+        name_long  = ("Obs", "n(Yes)", "Mean", "Std Err", "Confidence Interval", "Lower CI", "Upper CI", "Std Dev", "Variance", "Min", "Max")
+
+        if(input_bd.opt.ci_combined == 0)
+        {
+          st_local("stats", subinstr(st_local("stats"), "ci", "lci uci", .))
+        }
 
         t = tokens(st_local("stats"))
 
+        st.name_short = J(1, cols(t), "")
+        st.name_long  = J(1, cols(t), "")
+
         for(i=1; i<=cols(t); i++)
         {
-          if(t[1,i] == "obs")
-          {
-            st.name_short = st.name_short, "obs"
-            st.name_long  = st.name_long,  "Obs"
-            continue
-          }
-
-          if(t[1,i] == "nyes")
-          {
-            st.name_short = st.name_short, "nyes"
-            st.name_long  = st.name_long,  "n(Yes)"
-            continue
-          }
-
-          if(t[1,i] == "mean")
-          {
-            st.name_short = st.name_short, "mean"
-            st.name_long  = st.name_long,  "Mean"
-            continue
-          }
-
-          if(t[1,i] == "se")
-          {
-            st.name_short = st.name_short, "se"
-            st.name_long  = st.name_long,  "Std Err"
-            continue
-          }
-
-          if(t[1,i] == "ci" & input_bd.opt.ci_combined == 0)
-          {
-            st.name_short = st.name_short, "lci", "uci"
-            st.name_long  = st.name_long,  "Lower CI", "Upper CI"
-            continue
-          }
-
-          if(t[1,i] == "ci" & input_bd.opt.ci_combined == 1)
-          {
-            st.name_short = st.name_short, "ci"
-            st.name_long  = st.name_long,  "Confidence Interval"
-            continue
-          }
-
-          if(t[1,i] == "sd")
-          {
-            st.name_short = st.name_short, "sd"
-            st.name_long  = st.name_long,  "Std Dev"
-            continue
-          }
-
-          if(t[1,i] == "var")
-          {
-            st.name_short = st.name_short, "var"
-            st.name_long  = st.name_long,  "Variance"
-            continue
-          }
-
-          if(t[1,i] == "min")
-          {
-            st.name_short = st.name_short, "min"
-            st.name_long  = st.name_long,  "Min"
-            continue
-          }
-
-          if(t[1,i] == "max")
-          {
-            st.name_short = st.name_short, "max"
-            st.name_long  = st.name_long,  "Max"
-            continue
-          }
+          st.name_short[1,i] = t[1,i]
+          st.name_long[1,i]  = name_long[1,selectindex(t[1,i] :== name_short)]
         }
-
-        st.name_short = st.name_short[1,(2..cols(st.name_short))]
-        st.name_long  = st.name_long[1,(2..cols(st.name_long))]
 
         st.count = cols(st.name_short)
 
@@ -1292,46 +1267,42 @@ end;
       struct stats scalar st
       st = input_bd.st
 
-      st.col_format  = ""
-      st.col_length  = .
-      st.name_abbrev = ""
+      st.col_format  = J(1, st.count, "")
+      st.col_length  = J(1, st.count, .)
+      st.name_abbrev = J(1, st.count, "")
 
       for(i=1; i<=st.count; i++)
       {
         if(inlist(st.name_short[1,i], ("obs", "nyes")))
         {
-          st = formatObs(input_bd, st, st.name_short[1,i])
+          st = formatObs(input_bd, st, st.name_short[1,i], i)
           continue
         }
 
         if(inlist(st.name_short[1,i], ("mean")))
         {
-          st = formatMean(input_bd, st, st.name_short[1,i])
+          st = formatMean(input_bd, st, st.name_short[1,i], i)
           continue
         }
 
         if(inlist(st.name_short[1,i], ("se", "sd", "var")))
         {
-          st = formatError(input_bd, st, st.name_short[1,i])
+          st = formatError(input_bd, st, st.name_short[1,i], i)
           continue
         }
 
         if(inlist(st.name_short[1,i], ("lci", "uci", "ci")))
         {
-          st = formatCI(input_bd, st, st.name_short[1,i])
+          st = formatCI(input_bd, st, st.name_short[1,i], i)
           continue
         }
 
         if(inlist(st.name_short[1,i], ("min", "max")))
         {
-          st = formatMinMax(input_bd, st, st.name_short[1,i])
+          st = formatMinMax(input_bd, st, st.name_short[1,i], i)
           continue
         }
       }
-
-      st.col_format = st.col_format[1,(2..cols(st.col_format))]
-      st.col_length = st.col_length[1,(2..cols(st.col_length))]
-      st.name_abbrev = st.name_abbrev[1,(2..cols(st.name_abbrev))]
 
       return(st)
     }
@@ -1340,7 +1311,8 @@ end;
 
     struct stats scalar formatObs(struct braddev scalar input_bd,
                                   struct stats   scalar input_st,
-                                  string         scalar stat)
+                                  string         scalar stat,
+                                  real           scalar pos)
     {
       struct stats scalar st
       st = input_st
@@ -1349,16 +1321,11 @@ end;
 
         for(i=1; i<=cols(input_bd.res); i++)
         {
-          if(i==1)
-          {
-            if(stat == "obs") values = input_bd.res[1,i].vals_obs
-            if(stat == "nyes") values = input_bd.res[1,i].vals_nyes
-          }
-          else
-          {
-            if(stat == "obs") values = values \ input_bd.res[1,i].vals_obs
-            if(stat == "nyes") values = values \ input_bd.res[1,i].vals_nyes
-          }
+          if(stat == "obs")  val = input_bd.res[1,i].vals_obs
+          if(stat == "nyes") val = input_bd.res[1,i].vals_nyes
+
+          if(i == 1) values = val
+          else       values = values \ val
         }
 
       /* Format & Length */
@@ -1366,21 +1333,21 @@ end;
         length = max(udstrlen(strtrim(strofreal(values, "%9.0fc"))))
         length = max((length, 5))
 
-        st.col_format = st.col_format, ("%" + strofreal(length) + ".0fc")
-        st.col_length = st.col_length, length
+        st.col_format[1,pos] = ("%" + strofreal(length) + ".0fc")
+        st.col_length[1,pos] = length
 
       /* Name */
 
         if(stat == "obs")
         {
-          st.name_abbrev = st.name_abbrev, "Obs"
+          st.name_abbrev[1,pos] = "Obs"
         }
 
         if(stat == "nyes")
         {
           name = "n(Yes)"
           if(length < udstrlen(name)) name = "n(Y)"
-          st.name_abbrev = st.name_abbrev, name
+          st.name_abbrev[1,pos] = name
         }
 
       return(st)
@@ -1390,7 +1357,8 @@ end;
 
     struct stats scalar formatMean(struct braddev scalar input_bd,
                                    struct stats   scalar input_st,
-                                   string         scalar stat)
+                                   string         scalar stat,
+                                   real           scalar pos)
     {
       struct stats scalar st
       st = input_st
@@ -1399,15 +1367,19 @@ end;
 
         for(i=1; i<=cols(input_bd.res); i++)
         {
+          val = input_bd.res[1,i].vals_mean
+          ps  = input_bd.res[1,i].ps_stars
+          if(inlist(st.name_short, "ci") == 0) ps = ps :+ input_bd.res[1,i].ps_scripts
+
           if(i==1)
           {
-            values = input_bd.res[1,i].vals_mean
-            postscripts = input_bd.res[1,i].ps_stars
+            values      = val
+            postscripts = ps
           }
           else
           {
-            values = values \ input_bd.res[1,i].vals_mean
-            postscripts = postscripts \ input_bd.res[1,i].ps_stars
+            values      = values \ val
+            postscripts = postscripts \ ps
           }
         }
 
@@ -1425,7 +1397,7 @@ end;
         prefix = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
         suffix = input_bd.opt.dis_round
 
-        st.col_format = st.col_format, ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
+        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
 
       /* Length */
 
@@ -1433,11 +1405,11 @@ end;
         if(cols(postscripts) > 0) length = length + max(udstrlen(postscripts))
         length = max((length, 5))
 
-        st.col_length = st.col_length, length
+        st.col_length[1,pos] = length
 
       /* Name */
 
-        st.name_abbrev = st.name_abbrev, "Mean"
+        st.name_abbrev[1,pos] = "Mean"
 
       return(st)
     }
@@ -1446,7 +1418,8 @@ end;
 
     struct stats scalar formatError(struct braddev scalar input_bd,
                                     struct stats   scalar input_st,
-                                    string         scalar stat)
+                                    string         scalar stat,
+                                    real           scalar pos)
     {
       struct stats scalar st
       st = input_st
@@ -1455,18 +1428,12 @@ end;
 
         for(i=1; i<=cols(input_bd.res); i++)
         {
-          if(i==1)
-          {
-            if(stat == "se") values = input_bd.res[1,i].vals_se
-            if(stat == "sd") values = input_bd.res[1,i].vals_sd
-            if(stat == "var") values = input_bd.res[1,i].vals_var
-          }
-          else
-          {
-            if(stat == "se") values = values \ input_bd.res[1,i].vals_se
-            if(stat == "sd") values = values \ input_bd.res[1,i].vals_sd
-            if(stat == "var") values = values \ input_bd.res[1,i].vals_var
-          }
+          if(stat == "se")  val = input_bd.res[1,i].vals_se
+          if(stat == "sd")  val = input_bd.res[1,i].vals_sd
+          if(stat == "var") val = input_bd.res[1,i].vals_var
+
+          if(i==1) values = val
+          else     values = values \ val
         }
 
       /* Percent */
@@ -1482,14 +1449,14 @@ end;
         prefix = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
         suffix = input_bd.opt.dis_round
 
-        st.col_format = st.col_format, ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
+        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
 
       /* Length */
 
         length = prefix + suffix + input_bd.opt.dis_percent
         length = max((length, 5))
 
-        st.col_length = st.col_length, length
+        st.col_length[1,pos] = length
 
       /* Name */
 
@@ -1497,22 +1464,21 @@ end;
         {
           name = "Std Err"
           if(length < udstrlen(name)) name = "SE"
-          st.name_abbrev = st.name_abbrev, name
         }
 
         if(stat == "sd")
         {
           name = "Std Dev"
           if(length < udstrlen(name)) name = "SD"
-          st.name_abbrev = st.name_abbrev, name
         }
 
         if(stat == "var")
         {
           name = "Variance"
           if(length < udstrlen(name)) name = "Var"
-          st.name_abbrev = st.name_abbrev, name
         }
+
+        st.name_abbrev[1,pos] = name
 
       return(st)
     }
@@ -1521,7 +1487,8 @@ end;
 
     struct stats scalar formatCI(struct braddev scalar input_bd,
                                  struct stats   scalar input_st,
-                                 string         scalar stat)
+                                 string         scalar stat,
+                                 real           scalar pos)
     {
       struct stats scalar st
       st = input_st
@@ -1530,15 +1497,17 @@ end;
 
         for(i=1; i<=cols(input_bd.res); i++)
         {
+          val = input_bd.res[1,i].vals_ci
+          ps  = input_bd.res[1,i].ps_scripts
           if(i==1)
           {
-            values = input_bd.res[1,i].vals_ci
-            postscripts = input_bd.res[1,i].ps_scripts
+            values      = val
+            postscripts = ps
           }
           else
           {
-            values = values \ input_bd.res[1,i].vals_ci
-            postscripts = postscripts \ input_bd.res[1,i].ps_scripts
+            values      = values \ val
+            postscripts = postscripts \ ps
           }
         }
 
@@ -1555,7 +1524,7 @@ end;
         prefix = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
         suffix = input_bd.opt.dis_round
 
-        st.col_format = st.col_format, ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
+        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
 
       /* Length */
 
@@ -1571,7 +1540,7 @@ end;
           length = max((length, 8))
         }
 
-        st.col_length = st.col_length, length
+        st.col_length[1,pos] = length
 
       /* Name */
 
@@ -1579,22 +1548,21 @@ end;
         {
           name = "Lower CI"
           if(length < udstrlen(name)) name = "LCI"
-          st.name_abbrev = st.name_abbrev, name
         }
 
         if(stat == "uci")
         {
           name = "Upper CI"
           if(length < udstrlen(name)) name = "UCI"
-          st.name_abbrev = st.name_abbrev, name
         }
 
         if(stat == "ci")
         {
           name = "Confidence Interval"
           if(length < udstrlen(name)) name = "CI"
-          st.name_abbrev = st.name_abbrev, name
         }
+
+        st.name_abbrev[1,pos] = name
 
       return(st)
     }
@@ -1603,7 +1571,8 @@ end;
 
     struct stats scalar formatMinMax(struct braddev scalar input_bd,
                                      struct stats   scalar input_st,
-                                     string         scalar stat)
+                                     string         scalar stat,
+                                     real           scalar pos)
     {
       struct stats scalar st
       st = input_st
@@ -1612,14 +1581,8 @@ end;
 
         for(i=1; i<=cols(input_bd.res); i++)
         {
-          if(i==1)
-          {
-            values = input_bd.res[1,i].vals_minmax
-          }
-          else
-          {
-            values = values \ input_bd.res[1,i].vals_minmax
-          }
+          if(i==1) values = input_bd.res[1,i].vals_minmax
+          else     values = values \ input_bd.res[1,i].vals_minmax
         }
 
       /* Percent */
@@ -1652,25 +1615,25 @@ end;
           suffix = suffix1
         }
 
-        st.col_format = st.col_format, ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
+        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
 
       /* Length */
 
         length = prefix + suffix + input_bd.opt.dis_percent
         length = max((length, 5))
 
-        st.col_length = st.col_length, length
+        st.col_length[1,pos] = length
 
       /* Names */
 
         if(stat == "min")
         {
-          st.name_abbrev = st.name_abbrev, "Min"
+          st.name_abbrev[1,pos] = "Min"
         }
 
         if(stat == "max")
         {
-          st.name_abbrev = st.name_abbrev, "Max"
+          st.name_abbrev[1,pos] = "Max"
         }
 
       return(st)
@@ -2026,11 +1989,14 @@ end;
 
     void printer(struct braddev scalar input_bd)
     {
-      if(input_bd.opt.dis_print == 0 & input_bd.xl.output == 1) return(J(0,0,.))
+      if(input_bd.opt.dis_print == 0) return(J(0,0,.))
 
       /* Title */
 
-        printTitle(input_bd)
+        if(input_bd.opt.dis_title != "")
+        {
+          printf("\n{title:" + usubinstr(getTitle(input_bd), "%", "%%", .) + "}\n")
+        }
 
       /* Legend */
 
@@ -2063,13 +2029,6 @@ end;
         }
 
       printf("\n")
-    }
-
-  /* printTitle() */
-
-    void printTitle(struct braddev scalar input_bd)
-    {
-      if(input_bd.opt.dis_title != "none") printf("\n{title:" + getTitle(input_bd) + "}\n")
     }
 
   /* printLegend() */
@@ -2124,9 +2083,17 @@ end;
 
         for(i=1; i<=input_bd.vi.var_count; i++)
         {
-          if(input_bd.vi.series_position[1,i] == 1 & i > 1)
+          if(i > 1)
           {
-            table = table \ separator
+            if(input_bd.vi.series_position[1,i] == 1)
+            {
+              table = table \ separator
+            }
+
+            if(input_bd.vi.series_position[1,i] == . & input_bd.vi.series_position[1,(i-1)] != .)
+            {
+              table = table \ separator
+            }
           }
 
           table = table \ printResultsLongNoOver(input_bd, input_bd.res[1,i], name_width)
@@ -2519,11 +2486,13 @@ end;
 
           if(input_bd.opt.ovo_sep == 1 & cols(input_bd.oi.list) > 1 & input_bd.opt.ovo_labels == 1)
           {
-            table = J(2 + cols(input_bd.oi.list), 1 + (group_count * input_bd.st.count) + p_count, "")
+            table = J(cols(input_bd.oi.list), 1 + (group_count * input_bd.st.count) + p_count, "")
+            breaks = J(cols(input_bd.oi.list), 1 + (group_count * input_bd.st.count) + p_count, .)
 
             for(i=1; i<=cols(input_bd.oi.list); i++)
             {
               line = "{space " + strofreal(name_width + 2) + "}"
+              break_line = .
 
               stata("qui levelsof " + input_bd.oi.list[1,i] + " if !missing(" + st_local("group_var") + "), local(over_lvls)")
               over_lvls = strtoreal(tokens(st_local("over_lvls")))
@@ -2548,6 +2517,9 @@ end;
                 for(j=1; j<=rows(index_lvls); j++)
                 {
                   line = line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
+
+                  break_col = 2 + ((index_lvls[j,1] - 1) * input_bd.st.count)
+                  break_line = break_line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, break_col)
                 }
 
               /* Total */
@@ -2556,14 +2528,24 @@ end;
                 {
                   if(i == cols(input_bd.oi.list)) line = line, J(1, input_bd.st.count, "Total")
                   else                            line = line, J(1, input_bd.st.count, "")
+
+                  break_col = 2 + (input_bd.oi.count * input_bd.st.count)
+                  break_line = break_line, J(1, input_bd.st.count, break_col)
                 }
 
               /* P-Values */
 
-                if(i == cols(input_bd.oi.list)) line = line, J(1, p_count, "P-Values")
-                else                            line = line, J(1, p_count, "")
+                if(p_count > 0)
+                {
+                  if(i == cols(input_bd.oi.list)) line = line, J(1, p_count, "P-Values")
+                  else                            line = line, J(1, p_count, "")
+
+                  break_col = 2 + ((input_bd.oi.count + input_bd.opt.ovo_total) * input_bd.st.count)
+                  break_line = break_line, J(1, p_count, break_col)
+                }
 
               table[i,.] = line
+              breaks[i,.] = break_line
             }
           }
 
@@ -2571,47 +2553,117 @@ end;
 
           if(input_bd.opt.ovo_sep == 0 | cols(input_bd.oi.list) == 1 | input_bd.opt.ovo_labels == 0)
           {
-            table = J(3, 1 + (group_count * input_bd.st.count) + p_count, "")
+            table = J(1, 1 + (group_count * input_bd.st.count) + p_count, "")
+            breaks = J(1, 1 + (group_count * input_bd.st.count) + p_count, .)
 
             line = "{space " + strofreal(name_width + 2) + "}"
+            break_line = .
 
             /* Over Variable */
 
               for(i=1; i<=input_bd.oi.count; i++)
               {
                 line = line, J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
+
+                break_col = 2 + ((i - 1) * input_bd.st.count)
+                break_line = break_line, J(1, input_bd.st.count, break_col)
               }
 
             /* Total */
 
-              if(input_bd.opt.ovo_total) line = line, J(1, input_bd.st.count, "Total")
+              if(input_bd.opt.ovo_total)
+              {
+                line = line, J(1, input_bd.st.count, "Total")
+
+                break_col = 2 + (input_bd.oi.count * input_bd.st.count)
+                break_line = break_line, J(1, input_bd.st.count, break_col)
+              }
 
             /* P-Values */
 
-              line = line, J(1, p_count, "P-Values")
+              if(p_count > 0)
+              {
+                line = line, J(1, p_count, "P-Values")
+
+                break_col = 2 + ((input_bd.oi.count + input_bd.opt.ovo_total) * input_bd.st.count)
+                break_line = break_line, J(1, p_count, break_col)
+              }
 
             table[1,.] = line
+            breaks[1,.] = break_line
           }
 
-        /* Stats */
+        /* Frequencies & Stats - 1 Statistic */
 
-          line = "{space " + strofreal(name_width + 2) + "}{c |}"
-          line = line, J(1, group_count, " {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ abbrev(input_bd.st.name_abbrev, input_bd.st.col_length) :+ "} ")
-
-          if(input_bd.opt.pval_show > 0)
+          if(input_bd.st.count == 1)
           {
-            line = line, (" {" :+ al :+ " 6:" :+ abbrev("Overall", 6) :+ "} ")
-          }
+            line = "{space " + strofreal(name_width + 2) + "}{c |}"
 
-          if(input_bd.opt.pval_show == 2)
-          {
-            for(i=1; i<=(input_bd.oi.count-1); i++)
+            line = line, J(1, input_bd.oi.count + input_bd.opt.ovo_total, (" {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ input_bd.st.name_abbrev :+ "} "))
+
+            if(input_bd.opt.pval_show > 0)
             {
-              line = line, (" {" :+ al :+ " 6:" :+ abbrev((strofreal(i) :+ "v" :+ strofreal(range(i+1, input_bd.oi.count, 1)))', 6) :+ "} ")
+              line = line, (" {" :+ al :+ " 6:" :+ abbrev("Overall", 6) :+ "} ")
             }
+
+            if(input_bd.opt.pval_show == 2)
+            {
+              for(i=1; i<=(input_bd.oi.count-1); i++)
+              {
+                line = line, (" {" :+ al :+ " 6:" :+ abbrev((strofreal(i) :+ "v" :+ strofreal(range(i+1, input_bd.oi.count, 1)))', 6) :+ "} ")
+              }
+            }
+
+            table = table \ line
           }
 
-          table[rows(table)-1,.] = line
+        /* Frequencies & Stats - 2+ Statistics */
+
+          if(input_bd.st.count > 1)
+          {
+            /* Frequencies */
+
+              line = "{space " + strofreal(name_width + 2) + "}"
+
+              for(i=1; i<=input_bd.oi.count; i++)
+              {
+                line = line, J(1, input_bd.st.count, ("(n = " + strofreal(input_bd.oi.freqs[i,1], "%9.0gc") + ")"))
+              }
+
+              if(input_bd.opt.ovo_total == 1)
+              {
+                line = line, J(1, input_bd.st.count, ("(n = " + strofreal(sum(input_bd.oi.freqs), "%9.0gc") + ")"))
+              }
+
+              if(input_bd.opt.pval_show > 0)
+              {
+                line = line, J(1, p_count, "")
+              }
+
+              table = table \ line
+
+              breaks = breaks \ breaks[rows(breaks),.]
+
+            /* Stats */
+
+              line = "{space " + strofreal(name_width + 2) + "}{c |}"
+              line = line, J(1, group_count, " {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ abbrev(input_bd.st.name_abbrev, input_bd.st.col_length) :+ "} ")
+
+              if(input_bd.opt.pval_show > 0)
+              {
+                line = line, (" {" :+ al :+ " 6:" :+ abbrev("Overall", 6) :+ "} ")
+              }
+
+              if(input_bd.opt.pval_show == 2)
+              {
+                for(i=1; i<=(input_bd.oi.count-1); i++)
+                {
+                  line = line, (" {" :+ al :+ " 6:" :+ abbrev((strofreal(i) :+ "v" :+ strofreal(range(i+1, input_bd.oi.count, 1)))', 6) :+ "} ")
+                }
+              }
+
+              table = table \ line
+          }
 
         /* Separator */
 
@@ -2619,7 +2671,7 @@ end;
           separator = separator, J(1, group_count, ("{hline " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}"))
           separator = separator, J(1, p_count, ("{hline 8}"))
 
-          table[rows(table),.] = separator
+          table = table \ separator
 
         /* Header Row */
 
@@ -2630,9 +2682,17 @@ end;
 
         for(i=1; i<=input_bd.vi.var_count; i++)
         {
-          if(input_bd.vi.series_position[1,i] == 1 & i > 1)
+          if(i > 1)
           {
-            table = table \ separator
+            if(input_bd.vi.series_position[1,i] == 1)
+            {
+              table = table \ separator
+            }
+
+            if(input_bd.vi.series_position[1,i] == . & input_bd.vi.series_position[1,(i-1)] != .)
+            {
+              table = table \ separator
+            }
           }
 
           table = table \ printResultsWide(input_bd, input_bd.res[1,i], name_width)
@@ -2664,8 +2724,13 @@ end;
             {
               for(k=table_cols[i,1]; k<=table_cols[i,2]; k++)
               {
+                if(k != table_cols[i,1] & max(k :== breaks[j,.]) == 0)
+                {
+                  continue
+                }
+
                 /* Getting vectorIndex's of value */
-                index = selectindex(table[j,k] :== table[j,.])
+                index = selectindex(k :== breaks[j,.])
                 index = select(index, (index :>= table_cols[i,1]) :& (index :<= table_cols[i,2]))
                 index = vectorIndex(index)
 
@@ -2698,7 +2763,6 @@ end;
               }
 
               print_table[(stats_row..rows(print_table)),1] = print_table[(stats_row..rows(print_table)),1] :+ table[(stats_row..rows(table)),j]
-
             }
 
           display(print_table)
@@ -3034,9 +3098,9 @@ end;
 
       /* Title */
 
-        if(input_bd.opt.dis_title != "none")
+        if(input_bd.opt.dis_title != "")
         {
-          B.put_string(row, col, getTitle(input_bd))
+          B.put_string(row, col, input_bd.opt.dis_title)
           B.set_font_bold(row, col, "on")
 
           if(input_bd.opt.ovo_labels == 0 & input_bd.opt.ovo_legend == 1 & input_bd.oi.count > 0)
@@ -4402,8 +4466,16 @@ end;
 
                 for(j=1; j<=rows(index_lvls); j++)
                 {
-                  if(j == 1) line = J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
-                  else       line = line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
+                  if(j == 1)
+                  {
+                    line = J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
+                    break_line = J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, index_lvls[j,1])
+                  }
+                  else
+                  {
+                    line = line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
+                    break_line = break_line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, index_lvls[j,1])
+                  }
                 }
 
               /* Total */
@@ -4411,15 +4483,32 @@ end;
                 if(i == cols(input_bd.oi.list)) line = line, J(1, input_bd.opt.ovo_total * input_bd.st.count, "Total")
                 else                            line = line, J(1, input_bd.opt.ovo_total * input_bd.st.count, "")
 
-                if(input_bd.opt.ovo_total == 1) width = max((width \ (udstrlen("Total") / input_bd.st.count)))
+                if(input_bd.opt.ovo_total == 1)
+                {
+                  width = max((width \ (udstrlen("Total") / input_bd.st.count)))
+                  break_line = break_line, J(1, input_bd.st.count, input_bd.oi.count + 1)
+                }
 
               /* P-Values */
 
                 if(i == cols(input_bd.oi.list)) line = line, J(1, p_count, "P-Values")
                 else                            line = line, J(1, p_count, "")
 
-              if(i == 1) table = line
-              else       table = table \ line
+                if(p_count > 0)
+                {
+                  break_line = break_line, J(1, p_count, input_bd.oi.count + input_bd.opt.ovo_total + 1)
+                }
+
+              if(i == 1)
+              {
+                table = line
+                breaks = break_line
+              }
+              else
+              {
+                table = table \ line
+                breaks = breaks \ break_line
+              }
             }
 
             header_row = start_row + cols(input_bd.oi.list)
@@ -4435,8 +4524,16 @@ end;
 
               for(i=1; i<=input_bd.oi.count; i++)
               {
-                if(i == 1) table = J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
-                else       table = table, J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
+                if(i == 1)
+                {
+                  table = J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
+                  breaks = J(1, input_bd.st.count, i)
+                }
+                else
+                {
+                  table = table, J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
+                  breaks = breaks, J(1, input_bd.st.count, i)
+                }
               }
 
               curr_width = udstrlen(input_bd.oi.name_select) :/ input_bd.st.count
@@ -4446,48 +4543,114 @@ end;
 
               table = table, J(1, input_bd.opt.ovo_total * input_bd.st.count, "Total")
 
-              if(input_bd.opt.ovo_total == 1) width = max((width \ (udstrlen("Total") / input_bd.st.count)))
+              if(input_bd.opt.ovo_total == 1)
+              {
+                width = max((width \ (udstrlen("Total") / input_bd.st.count)))
+                breaks = breaks, J(1, input_bd.st.count, input_bd.oi.count + 1)
+              }
 
             /* P-Values */
 
               table = table, J(1, p_count, "P-Values")
 
+              if(p_count > 0)
+              {
+                breaks = breaks, J(1, p_count, input_bd.oi.count + input_bd.opt.ovo_total + 1)
+              }
+
             header_row = start_row + 1
           }
 
-        /* Stats */
+        /* Frequencies & Stats - 1 Statistic */
 
-          line = J(1, input_bd.oi.count + input_bd.opt.ovo_total, input_bd.st.name_long)
-
-          if(input_bd.opt.pval_show > 0) line = line, "Overall"
-
-          if(input_bd.opt.pval_show == 2)
+          if(input_bd.st.count == 1)
           {
-            for(i=1; i<=input_bd.oi.count; i++)
+            line = "(n = " :+ strofreal(input_bd.oi.freqs', "%12.0gc") :+ ")"
+
+            if(input_bd.opt.ovo_total == 1)
             {
-              for(j=i+1; j<=input_bd.oi.count; j++)
+              line = line, ("(n = " :+ strofreal(sum(input_bd.oi.freqs), "%12.0gc") :+ ")")
+            }
+
+            if(input_bd.opt.pval_show > 0)
+            {
+              line = line, "Overall"
+            }
+
+            if(input_bd.opt.pval_show == 2)
+            {
+              for(i=1; i<=input_bd.oi.count; i++)
               {
-                line = line, (input_bd.oi.name_select[i,1] :+ char(10) :+ " vs " :+ char(10) :+ input_bd.oi.name_select[j,1])
+                for(j=i+1; j<=input_bd.oi.count; j++)
+                {
+                  line = line, (input_bd.oi.name_select[i,1] :+ char(10) :+ " vs " :+ char(10) :+ input_bd.oi.name_select[j,1])
+                }
               }
             }
+
+            table = table \ line
           }
 
-          table = table \ line
+        /* Frequencies & Stats - 2+ Statistics */
+
+          if(input_bd.st.count > 1)
+          {
+            /* Frequencies */
+
+              for(i=1; i<=input_bd.oi.count; i++)
+              {
+                if(i==1) line = J(1, input_bd.st.count, ("(n = " :+ strofreal(input_bd.oi.freqs[i,1], "%12.0gc") :+ ")"))
+                else     line = line, J(1, input_bd.st.count, ("(n = " :+ strofreal(input_bd.oi.freqs[i,1], "%12.0gc") :+ ")"))
+              }
+
+              if(input_bd.opt.ovo_total == 1)
+              {
+                line = line, J(1, input_bd.st.count, ("(n = " :+ strofreal(sum(input_bd.oi.freqs), "%12.0gc") :+ ")"))
+              }
+
+              if(input_bd.opt.pval_show > 0)
+              {
+                line = line, J(1, p_count, "")
+              }
+
+              table = table \ line
+              breaks = breaks \ breaks[rows(breaks),.]
+              header_row = header_row + 1
+
+            /* Stats */
+
+              line = J(1, input_bd.oi.count + input_bd.opt.ovo_total, input_bd.st.name_long)
+
+              if(input_bd.opt.pval_show > 0) line = line, "Overall"
+
+              if(input_bd.opt.pval_show == 2)
+              {
+                for(i=1; i<=input_bd.oi.count; i++)
+                {
+                  for(j=i+1; j<=input_bd.oi.count; j++)
+                  {
+                    line = line, (input_bd.oi.name_select[i,1] :+ char(10) :+ " vs " :+ char(10) :+ input_bd.oi.name_select[j,1])
+                  }
+                }
+              }
+
+              table = table \ line
+          }
 
         /* Style */
 
           col = 2
           B.put_string(start_row, col, table)
 
-          /* Merging */
+          /* Merging (2) */
 
             for(i=1; i<rows(table); i++)
             {
-              lvls = uniqrows(table[i,.]')
+              lvls = uniqrows(breaks[i,.]')
 
               for(j=1; j<=rows(lvls); j++)
               {
-                vec_index = vectorIndex(selectindex(table[i,.] :== lvls[j,1])) :+ 1
+                vec_index = vectorIndex(selectindex(breaks[i,.] :== lvls[j,1])) :+ 1
 
                 for(k=1; k<=rows(vec_index); k++)
                 {
@@ -4495,18 +4658,12 @@ end;
                   col_1 = vec_index[k,1]
                   col_2 = vec_index[k,2]
 
-                  if(lvls[j,1] == "" & input_bd.opt.ovo_total & input_bd.opt.pval_show > 0)
-                  {
-                    B.set_sheet_merge(sheet, (row, row), (col_1, p_col - 1))
-                    B.set_sheet_merge(sheet, (row, row), (p_col, col_2))
-                  }
-                  else
-                  {
-                    B.set_sheet_merge(sheet, (row, row), (col_1, col_2))
-                  }
+                  B.set_sheet_merge(sheet, (row, row), (col_1, col_2))
                 }
               }
             }
+
+
 
           /* Setting Formats */
 
@@ -4942,7 +5099,6 @@ end;
           stat_types[1,string_pos[1,i]] = "string"
         }
 
-
       /* Creating Numeric Table */
 
         group_count = input_bd.oi.count + input_bd.opt.ovo_total
@@ -5024,7 +5180,6 @@ end;
       /* Creating String Table */
 
         full_table = J(0,0,"")
-
 
         if(cols(string_pos) > 0)
         {
@@ -5182,7 +5337,7 @@ end;
 
       for(i=1; i<=cols(needle); i++)
       {
-        values[1,.] = max(haystack :== needle[1,i])
+        values[1,i] = max(haystack :== needle[1,i])
       }
 
       return(values)
@@ -5212,13 +5367,18 @@ end;
     {
       title = ""
 
+      /* None */
+
+        if(input_bd.opt.dis_title == "none")
+        {
+          return(title)
+        }
+
       /* Pre-selected Title */
 
         if(input_bd.opt.dis_title != "")
         {
           title = input_bd.opt.dis_title
-
-
           return(title)
         }
 
@@ -5240,7 +5400,10 @@ end;
 
       /* Multiple Series */
 
-        title = invtokens(uniqrows(input_bd.vi.series_name')', ", ")
+        st_local("series_list", invtokens(char(34) :+ input_bd.vi.series_name :+ char(34)))
+        stata("local series_list : list uniq series_list")
+
+        title = invtokens(tokens(st_local("series_list")), ", ")
 
       return(title)
     }
