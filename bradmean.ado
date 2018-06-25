@@ -1077,7 +1077,7 @@ end;
 
       /* Wide */
 
-        if(input_bd.oi.count == 0)
+        if(input_bd.oi.count <= 1)
         {
           opt.dis_wide = 0
         }
