@@ -1236,7 +1236,7 @@ end;
 
       /* Processing */
 
-        name_short = ("obs", "mean", "nyes", "se", "ci", "lci", "uci", "sd", "var", "min", "max")
+        name_short = ("obs", "nyes", "mean", "se", "ci", "lci", "uci", "sd", "var", "min", "max")
         name_long  = ("Obs", "n(Yes)", "Mean", "Std Err", "Confidence Interval", "Lower CI", "Upper CI", "Std Dev", "Variance", "Min", "Max")
 
         if(input_bd.opt.ci_combined == 0)
