@@ -104,7 +104,7 @@
 
 {space 8}{opt all}{space 4} all statistics below
 {space 8}{opt obs}{space 4} observations (n)
-{space 8}{opt n_yes}{space 2} observations with {it:varname} != 0 & !missing({it:varname})
+{space 8}{opt nyes}{space 2} observations with {it:varname} != 0 & !missing({it:varname})
 {space 8}{opt mean}{space 3} mean (b)
 {space 8}{opt se}{space 5} standard error (se)
 {space 8}{opt sd}{space 5} standard deviation (sd)
@@ -116,7 +116,7 @@
 {space 8}{opt max}{space 4} maximum value of variable
 
 {pmore}
-default for {bf:long} is {cmd:obs n_yes mean sd ci}
+default for {bf:long} is {cmd:obs nyes mean sd ci}
 {p_end}
 {pmore}
 default for {bf:wide} is {cmd:mean}
