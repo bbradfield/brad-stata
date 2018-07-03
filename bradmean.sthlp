@@ -165,6 +165,6 @@ For series options to correctly work, variable labels must be in the following f
 {space 8}{opt mod:ify}{space 9} modify (append) sheet
 
 {pmore}
-One of {opt rep:lace}, {opt sheetrep:place}, {opt mod:ify} must be chosen.
+One of {opt rep:lace}, {opt sheetrep:lace}, {opt mod:ify} must be chosen.
 {p_end}
 
