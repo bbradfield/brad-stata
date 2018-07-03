@@ -138,7 +138,7 @@ version 14.0
   *   08. Cleaning Up                                        *
   *----------------------------------------------------------*;
 
-    mata: mata clear;
+    mata: mata drop bd;
 
 end;
 
@@ -2730,9 +2730,16 @@ end;
                 }
 
                 /* Getting vectorIndex's of value */
-                index = selectindex(k :== breaks[j,.])
-                index = select(index, (index :>= table_cols[i,1]) :& (index :<= table_cols[i,2]))
-                index = vectorIndex(index)
+                if(k == table_cols[i,1] & max(k :== breaks[j,.]) == 0)
+                {
+                  index = table_cols[i,1], table_cols[i,2]
+                }
+                else
+                {
+                  index = selectindex(k :== breaks[j,.])
+                  index = select(index, (index :>= table_cols[i,1]) :& (index :<= table_cols[i,2]))
+                  index = vectorIndex(index)
+                }
 
                 /* If not starting a range, continue */
                 if(!inlist(k, index[.,1]))
