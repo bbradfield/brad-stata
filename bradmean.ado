@@ -17,7 +17,7 @@ version 14.0
 /*   Stata Functions                                                    */
 /*======================================================================*/
 
-  program define braddev, rclass sortpreserve byable(recall);
+  program define bradmean, rclass sortpreserve byable(recall);
   syntax varlist(fv) [if] [in],
     [
       SVY
