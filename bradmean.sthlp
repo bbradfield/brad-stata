@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.4.2  25jun2018}{...}
+{* *! version 1.5.0  08nov2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -9,7 +9,6 @@
 
 {phang}
 {bf:bradmean} {hline 2} Computes multiple independent means in a single table
-
 
 {marker syntax}{...}
 {title:Syntax}
@@ -23,20 +22,22 @@
 {synoptset 20 tabbed}{...}
 {synopthdr}
 {synoptline}
-{syntab:General}
+{syntab:Weight}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
 {synopt:{opth sub:pop(varname)}}subpopulation estimation by {it:varname}; {it:varname} must be 0/1{p_end}
-{synopt:{cmd:over(}{it:{help varlist}}{cmd:)}}estimation over groups defined by {it:varlist}{p_end}
 
-{syntab:Format}
-{synopt:{cmd:overopt(}{it:{help string}}{cmd:)}}display options for over variables{p_end}
-{synopt:{opth pval:ues(string)}}select which type of p-values to be displayed{p_end}
-{synopt:{cmd:ci(}{it:{help string}}{cmd:)}}display options for confidence intervals{p_end}
-{synopt:{opth st:ats(string)}}select which stats to be displayed{p_end}
-{synopt:{opth dis:play(string)}}general display options{p_end}
+{syntab:Over}
+{synopt:{opth over(varlist)}}estimation over groups defined by {it:varlist}{p_end}
+{synopt:{opth overopt(string)}}options for over variables{p_end}
+{synopt:{opth test(string)}}options for significance testing{p_end}
 
 {syntab:Output}
-{synopt:{opth ex:cel(string)}}excel output settings{p_end}
+{synopt:{opth dis:play(string)}}general display options{p_end}
+{synopt:{opth title(string)}}optional custom title or "{bf:none}" to display no title{p_end}
+{synopt:{opth sort(string)}}sorting results within a series{p_end}
+{synopt:{opth st:ats(string)}}select which statistics to be displayed{p_end}
+{synopt:{opth format(string)}}formatting options for displayed statistics{p_end}
+{synopt:{opth excel(string)}}Excel output options{p_end}
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
@@ -46,12 +47,12 @@
 {title:Description}
 
 {pstd}
-{cmd:bradmean} computes multiple independent means of {varlist}. Estimations can be run by groups, which will include comparative p-values (using adjusted Wald test).
+{cmd:bradmean} computes multiple independent means of {varlist}. Estimations can be run by groups and can include significance testing.
 
 {marker options}{...}
 {title:Options}
 
-{dlgtab:General}
+{dlgtab:Weight}
 
 {phang}
 {opt svy} specifies that statistics will be survey weighted.
@@ -59,112 +60,95 @@
 {phang}
 {opth sub:pop(varname)} specifies that estimates be computed using subpopulation {varname}. {varname} must be 0/1.
 
-{phang}
-{cmd:over(}{it:{help varlist}}{cmd:)} specifies that estimates be computed for multiple groups, which are identified by the different values of the variable(s) {varlist}.
-
-{dlgtab:Format}
+{dlgtab:Over}
 
 {phang}
-{cmd:overopt(}{it:{help string}}{cmd:)} has the following options:
-
-{space 8}{opt nolab:els}{space 3} do not display over labels
-{space 8}{opt noleg:end}{space 3} do not display legend for over groups
-{space 8}{opt nomiss}{space 5} do not display groups with no non-missing values
-{space 8}{opt sep:arator}{space 2} display levels of separate over variables in separate rows
-{space 8}{opt tot:al}{space 6} display overall statistics
+{opth over(varlist)} specifies that estimates be computed for multiple groups, which are identified by the different values of the variable(s) {varlist}.
 
 {phang}
-{opth pval:ues(string)} has the following options:
+{opth overopt(string)} has the following options:
 
-{space 8}{opt all}{space 14} display all p-values
-{space 8}{opt ind:ividual}{space 7} display individual p-values
-{space 8}{opt over:all}{space 10} display overall p-values
-{space 8}{opt none}{space 13} display no p-values
-{space 8}{opth mtest(string)}{space 4} choose from {opt b:onferroni}, {opt h:olm}, or {opt s:idak}
-{space 8}{opth star:s(numlist)}{space 3} display up to 3 significance stars for p-values between 0 and 1;
-{space 25} default is 0.05 and 0.01
-{space 8}{opt script:s(#)}{space 7} display significance superscripts for 1 p-value between 0 and 1;
-{space 25} default is 0.05
-{space 8}{opt force}{space 12} force displayp-values even with significance stars or superscripts
+{p2colset 8 18 19 8}{p2col:{opt nolab:els}} do not display over labels{p_end}
+{p2colset 8 18 19 8}{p2col:{opt noleg:end}} do not display legend for over groups{p_end}
+{p2colset 8 18 19 8}{p2col:{opt nomi:ss}} do not display groups with no non-missing values{p_end}
+{p2colset 8 18 19 8}{p2col:{opt tot:al}} display overall statistics{p_end}
+{p2colset 8 18 19 8}{p2col:{opt group}} display each group size below name (wide only){p_end}
 
 {phang}
-{cmd:ci(}{it:{help string}}{cmd:)} has the following options:
+{opth test(string)} has the following options:
 
-{space 8}{opt prop:ortion}{space 8} display logit-transformed CIs (like {help proportion})
-{space 8}{opt log:it}{space 13} display logit-transformed CIs (like {help proportion})
-{space 8}{opt lev:el(#)}{space 10} calculate CIs at a number between 0 and 100
-{space 8}{opt round(#)}{space 10} display between 0 and 7 decimals in CIs
-{space 8}{opt comb:ined}{space 10} display CIs as a combined column
-{space 8}{opt par:entheses}{space 7} display combined CIs with parentheses
-{space 8}{opt brac:kets}{space 10} display combined CIs with brackets
-{space 8}{opth sep:arator(string)}{space 1} display combined CIs separated by - or ,
-
-{phang}
-{opth st:ats(string)} has the following options:
-
-{space 8}{opt all}{space 4} all statistics below
-{space 8}{opt obs}{space 4} observations (n)
-{space 8}{opt nyes}{space 2} observations with {it:varname} != 0 & !missing({it:varname})
-{space 8}{opt mean}{space 3} mean (b)
-{space 8}{opt se}{space 5} standard error (se)
-{space 8}{opt sd}{space 5} standard deviation (sd)
-{space 8}{opt var}{space 4} variance (var)
-{space 8}{opt ci}{space 5} confidence interval (lci-uci)
-{space 8}{opt lci}{space 4} lower bound of confidence interval
-{space 8}{opt uci}{space 4} upper bound of confidence interval
-{space 8}{opt min}{space 4} minimum value of variable
-{space 8}{opt max}{space 4} maximum value of variable
-
-{pmore}
-default for {bf:long} is {cmd:obs nyes mean sd ci}
-{p_end}
-{pmore}
-default for {bf:wide} is {cmd:mean}
-{p_end}
-
-
-{phang}
-{opth dis:play(string)} has the following options:
-
-{space 8}{opt pct}{space 12} display binary variables as a percentage
-{space 8}{opt per:cent}{space 8} display binary variables as a percentage
-{space 8}{opth al:ign(string)}{space 2} set alignment as {opt l:eft}, {opt c:enter}, {opt r:ight}
-{space 8}{opt round(#)}{space 7} display between 0 and 7 decimals in non-CI numbers
-{space 8}{cmd:title(}{it:{help string}}{cmd:)}{space 2} display a title or use {opt none} to display no title
-{space 8}{opt wide}{space 11} display in a wide format
-{space 8}{opt nofo:oter}{space 7} do not display footer (only applies when stars or scripts active)
-{space 8}{opt noprint}{space 8} do not print results table (only applies when excel output is active)
-{space 8}{opt xival:ues}{space 7} display labels of xi values instead of numbers; default {opt on}
-{space 8}{opt xivar:s}{space 9} display labels of xi variables instead of {help varname}; default {opt off}
-{space 8}{opt xi}{space 13} sets both xivalues and xivars {opt on}
-{space 8}{opt noxi}{space 11} sets both xivalues and xivars {opt off}
-{space 8}{opt seriesval:ues}{space 3} display answers of individual variables in series (see below); default {opt off}
-{space 8}{opt seriesvar:s}{space 5} display questions of variables in series (see below); default {opt off}
-{space 8}{opt series}{space 9} sets both seriesvalues and seriesvars {opt on}
-{space 8}{opt noseries}{space 7} sets both seriesvalues and seriesvars {opt off}
-
-{pmore}
-For series options to correctly work, variable labels must be in the following format:
-{p_end}
-{pmore}
-{opt [answer] question}
-{p_end}
+{p2colset 8 26 27 8}{p2col:{opt chi:2}} display Chi2 p-values for categorical variables. When data is {help svyset}, Chi2 is corrected to a Pearson F test{p_end}
+{p2colset 8 26 27 8}{p2col:{opth ttest(string)}} display t-test p-values for {opt over:all} comparisons (only applies when there are 2 groups), {opt ind:ividual} comparisons, or {opt all} for both overall and individual{p_end}
+{p2colset 8 26 27 8}{p2col:{opth ftest(string)}} display adjusted Wald F-test p-values for {opt over:all} comparisons, {opt ind:ividual} comparisons, or {opt all} for both overall and individual. {opth mtest(string)} allows adjustments for multiple comparisons using {opt b:onferroni}, {opt h:olm}, or {opt s:idak}{p_end}
+{p2colset 8 26 27 8}{p2col:{opth star:s(numlist)}} creates up to 3 significance stars for overall p-values less than {it:{help numlist}} containing 0-3 values. Leaving {it:{help numlist}} empty defaults to p < 0.05 and p < 0.01{p_end}
+{p2colset 8 26 27 8}{p2col:{opth script:s(numlist)}} creates up to 18 significance scripts for individual p-values less than  {it:{help numlist}} containing 0-1 values. Leaving {it:{help numlist}} empty defaults to p < 0.05{p_end}
+{p2colset 8 26 27 8}{p2col:{opt stat}} display test statistics with p-values{p_end}
+{p2colset 8 26 27 8}{p2col:{opt force}} display p-values even with stars or scripts enabled{p_end}
+{p2colset 8 26 27 8}{p2col:{opt nofo:oter}} do not display footer explaining significance stars and scripts{p_end}
 
 {dlgtab:Output}
 
 {phang}
-{opth ex:cel(string)} creates excel output using the following:
+{opth display(string)} has the following options:
 
-{space 8}{opt f:ile(path)}{space 5} the path for the excel output;
-{space 23} default path is the current working directory
-{space 23} default filename is {opt bradmean_output.xlsx}
-{space 8}{opth sheet(string)}{space 2} choose sheet for output;
-{space 23} default is {opt Sheet 1}
-{space 8}{opt rep:lace}{space 8} replace file
-{space 8}{opt sheetrep:lace}{space 3} replace sheet
-{space 8}{opt mod:ify}{space 9} modify (append) sheet
+{p2colset 8 23 24 8}{p2col:{opt xi}} enable both xi value and xi variable labels{p_end}
+{p2colset 8 23 24 8}{p2col:{opt xival:s}} enable xi value labels (default is {bf:ON}){p_end}
+{p2colset 8 23 24 8}{p2col:{opt xivar:s}} enable xi variable labels (default is {bf:OFF}){p_end}
+{p2colset 8 23 24 8}{p2col:{opt series}} enable both series value and series variable labels{p_end}
+{p2colset 8 23 24 8}{p2col:{opt seriesval:s}} enable series value labels (default is {bf:ON}){p_end}
+{p2colset 8 23 24 8}{p2col:{opt seriesvar:s}} enable series variable labels (default is {bf:OFF}){p_end}
+{p2colset 8 23 24 8}{p2col:{opt wide}} print table in a wide format{p_end}
+{p2colset 8 23 24 8}{p2col:{opth al:ign(string)}} choose {opt l:eft}, {opt c:enter}, or {opt r:ight} alignment of statistics{p_end}
+{p2colset 8 23 24 8}{p2col:{opt noprint}} do not display table (can be used with Excel output){p_end}
 
-{pmore}
-One of {opt rep:lace}, {opt sheetrep:lace}, {opt mod:ify} must be chosen.
-{p_end}
+{phang}
+{opth title(string)} specifies an optional custom title or {bf:"none"} to display no title.
 
+{phang}
+{opth sort(string)} allows sorting within series by choosing direction ({bf:+} for ascending, {bf:-} for descending) and statistic (obs nyes mean se sd var min max).
+
+{phang}
+{opth st:ats(string)} allows users to choose from the following statistics:
+
+{p2colset 8 14 15 8}{p2col:{opt obs}} observations{p_end}
+{p2colset 8 14 15 8}{p2col:{opt nyes}} number of "yes" answers (only for binary variables){p_end}
+{p2colset 8 14 15 8}{p2col:{opt mean}} mean{p_end}
+{p2colset 8 14 15 8}{p2col:{opt se}} standard error{p_end}
+{p2colset 8 14 15 8}{p2col:{opt sd}} standard deviation{p_end}
+{p2colset 8 14 15 8}{p2col:{opt var}} variance{p_end}
+{p2colset 8 14 15 8}{p2col:{opt ci}} confidence interval{p_end}
+{p2colset 8 14 15 8}{p2col:{opt min}} minimum{p_end}
+{p2colset 8 14 15 8}{p2col:{opt max}} maximum{p_end}
+{p2colset 8 14 15 8}{p2col:{opt all}} all of the above{p_end}
+
+{phang}
+{opth format(string)} sets the formatting for statistics. Individual statistics can be formatted using {opth stat(string)} where {opt stat} can be obs, nyes, mean, se, sd, var, ci, min, max, count (obs/nyes), error (se/sd/var), or minmax (min/max). The following options are allowed:
+
+{p2colset 8 27 28 8}{p2col:{opt round(#)}} round for both binary and continuous variables. Default is {bf:7}{p_end}
+{p2colset 8 27 28 8}{p2col:{opt roundi(#)}} round for binary variables. Default is {bf:7}{p_end}
+{p2colset 8 27 28 8}{p2col:{opt roundc(#)}} round for continuous variables. Default is {bf:7}{p_end}
+{p2colset 8 27 28 8}{p2col:{opt pct}} format binary variables as a percentage{p_end}
+{p2colset 8 27 28 8}{p2col:{opt per:cent}} format binary variables as a percentage{p_end}
+{p2colset 8 27 28 8}{p2col:{opt per:cent}} format binary variables as a percentage{p_end}
+{p2colset 8 27 28 8}{p2col:{opt nosym:bol}} do not display % after percentage{p_end}
+{p2colset 8 27 28 8}{p2col:{opth not:ation(string)}} choose to surround statistic with {opt par:entheses} or {opt bra:ckets}{p_end}
+{p2colset 8 27 28 8}{p2col:{opt star:s}} display significance stars on this statistic. Default is {bf:mean}{p_end}
+{p2colset 8 27 28 8}{p2col:{opt script:s}} display significance scripts on this statistic. Default is {bf:ci}{p_end}
+{p2colset 8 27 28 8}{p2col:{opt lvl(#)}} ({bf:ci} only) choose level for confidence interval{p_end}
+{p2colset 8 27 28 8}{p2col:{opt lev:el(#)}} ({bf:ci} only) choose level for confidence interval{p_end}
+{p2colset 8 27 28 8}{p2col:{opt prop:ortion}} ({bf:ci} only) logit transform the confidence interval (similar to {help proportion}){p_end}
+{p2colset 8 27 28 8}{p2col:{opt comb:ined}} ({bf:ci} only) put lower CI and upper CI in 1 column{p_end}
+{p2colset 8 27 28 8}{p2col:{opth sep:arator(string)}} ({bf:ci} only) use {bf:"-"} or {bf:","} to separate a combined CI{p_end}
+{p2colset 8 27 28 8}{p2col:{opt nocomma}} ({bf:count} only) do not display thousands separators{p_end}
+
+{phang}
+{opth excel(string)} has the following options:
+
+{p2colset 8 23 24 8}{p2col:{opth file(string)}} location of output file. Default is a file named {bf:bradmean_output.xlsx} in the current working directory{p_end}
+{p2colset 8 23 24 8}{p2col:{opth sheet(string)}} name of sheet to be used. Default is the first file in the sheet or {bf:Sheet1} in a new workbook{p_end}
+{p2colset 8 23 24 8}{p2col:{opt rep:lace}} replace the workbook{p_end}
+{p2colset 8 23 24 8}{p2col:{opt sheetrep:lace}} replace the sheet{p_end}
+{p2colset 8 23 24 8}{p2col:{opt mod:ify}} append table to the end of the sheet{p_end}
+{p2colset 8 23 24 8}{p2col:{opth font(string)}} choose the font face from {bf:Arial}, {bf:Calibri}, {bf:Garamond}, {bf:Helvetica}, {bf:TNR} (Times New Roman), or {bf:Verdana}. Default is {bf:Calibri}{p_end}
+{p2colset 8 23 24 8}{p2col:{opt size(#)}} choose the font size between 9 and 12. Default is {bf:11}{p_end}
+{p2colset 8 23 24 8}{p2col:{opth color(string)}} choose the color styles from {bf:bradmean}, {bf:monochrome}, {bf:rti}, {bf:material_red}, {bf:material_purple}, {bf:material_indigo}, {bf:material_blue}, {bf:material_green}, and {bf:material_orange}{p_end}

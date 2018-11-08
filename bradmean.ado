@@ -5,56 +5,43 @@ version 14.0
 **======================================================================**
 **                                                                      **
 **   Program:      bradmean.ado                                         **
-**   Purpose:      Mata implementation of Bradmean                      **
+**   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.4.2                                                **
-**   Date:         06/25/2018                                           **
+**   Version:      1.5.0                                                **
+**   Date:         11/08/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
-**======================================================================**
-**   Stata Functions                                                    **
-**======================================================================**;
+/*======================================================================*/
+/*   Stata Functions                                                    */
+/*======================================================================*/
 
-  program define bradmean, rclass sortpreserve byable(recall);
-  syntax varlist [if] [in],
+  program define braddev, rclass sortpreserve byable(recall);
+  syntax varlist(fv) [if] [in],
     [
       SVY
       SUBpop(varname numeric)
+
       OVER(varlist)
       OVEROPT(string)
-      PVALues(string)
-      CI(string)
-      STats(string)
+      TEST(string)
+
       DISplay(string)
-      EXcel(string)
+      TITLE(string)
+      SORT(string)
+      STats(string)
+      FORMAT(string)
+      EXCEL(string)
     ];
 
   *----------------------------------------------------------*
-  *   01. Setting Parameters & Options (1)                   *
-  *----------------------------------------------------------*;
-
-    mata: bd = newBraddev();
-
-  *----------------------------------------------------------*
-  *   02. Marking Sample                                     *
+  *   01. Creating Sample Marker                             *
   *----------------------------------------------------------*;
 
     tempname touse;
 
     mark `touse' `if' `in';
-
-    mata: st_numscalar("r(survey)", bd.opt.survey);
-    if(r(survey) == 1) {; svymarkout `touse'; };
-
-    mata: st_numscalar("r(miss)", bd.opt.ovo_miss);
-    if(r(miss) == 0)
-    {;
-      tempvar all_missing;
-      qui egen `all_missing' = rowtotal(`varlist'), m;
-      markout `touse' `all_missing';
-    };
 
     if(_by())
     {;
@@ -62,2994 +49,2875 @@ version 14.0
     };
 
   *----------------------------------------------------------*
-  *   03. Creating Over Variable                             *
+  *   02. Using Mata Functions                               *
   *----------------------------------------------------------*;
 
-    tempname freqs;
-
-    if("`over'" != "")
-    {;
-      /* Creating `group_string' & `group_numeric' */
-
-        tempvar group_string;
-        qui egen strL `group_string' = concat(`over') if `touse', decode maxlength(31990) p(", ");
-
-        tempvar group_numeric;
-        qui egen `group_numeric' = group(`over') if `touse';
-
-      /* Creating `over_count' */
-
-        qui levelsof `group_numeric', local(over_lvls);
-        local over_count : word count `over_lvls';
-
-      /* Adding `group_numeric' to `group_string' */
-
-        local num_format = "%0" + string(length("`over_count'")) + ".0f";
-        qui replace `group_string' = string(`group_numeric', "`num_format'") + " " + `group_string';
-        qui replace `group_string' = "" if `group_numeric' == .;
-
-      /* Converting `group_string' to `group_var' */
-
-        tempname group_var;
-        encode `group_string', generate(`group_var');
-
-      /* Getting Details */
-
-        mata: bd.oi = getOverInfo(bd);
-
-      /* Cleaning */
-
-        cap drop `group_numeric';
-        cap drop `group_string';
-
-        local group_numeric;
-        local group_string;
-        local num_format;
-        local over_count;
-    };
-
-  *----------------------------------------------------------*
-  *   04. Setting Parameters & Options (2)                   *
-  *----------------------------------------------------------*;
-
-    mata: bd.opt = cleanOptions(bd);
-    mata: bd.st = getStats(bd);
-
-  *----------------------------------------------------------*
-  *   05. Getting Results                                    *
-  *----------------------------------------------------------*;
-
-    mata: bd.res = generateResults(bd);
-
-  *----------------------------------------------------------*
-  *   06. Printing Results                                   *
-  *----------------------------------------------------------*;
-
-    mata: bd.st = formatStats(bd);
+    mata: bd     = braddev();
+    mata: bd.opt = getOptions();
+    mata: bd.vi  = getVarInfo(bd);
+    mata: bd.oi  = getOverInfo(bd);
+    mata: bd.si  = getStatInfo(bd);
+    mata: gatherResults(bd);
     mata: printer(bd);
-
-  *----------------------------------------------------------*
-  *   07. Excel Output                                       *
-  *----------------------------------------------------------*;
-
     mata: createExcel(bd);
 
   *----------------------------------------------------------*
-  *   08. Cleaning Up                                        *
+  *   03. Cleaning Up                                        *
   *----------------------------------------------------------*;
 
     mata: mata drop bd;
 
 end;
 
-**======================================================================**
-**   Mata Structures (Initialize)                                       **
-**======================================================================**;
+#delimit cr
 
-  #delimit cr
+mata:
 
-  mata:
+/*======================================================================*/
+/*   Mata Functions - general                                           */
+/*======================================================================*/
 
-  /* struct - braddev */
+  /* function : inlist() */
+
+    real matrix inlist(transmorphic matrix needle,
+                       transmorphic matrix haystack)
+    {
+      values = J(rows(needle), cols(needle), .)
+
+      for(i=1; i<=rows(needle); i++)
+      {
+        for(j=1; j<=cols(needle); j++)
+        {
+          values[i,j] = anyof(haystack, needle[i,j])
+        }
+      }
+
+      return(values)
+    }
+
+/*======================================================================*/
+/*   Mata Structure - braddev                                           */
+/*======================================================================*/
+
+  /* struct : braddev */
 
     struct braddev
     {
-      /* Variable Information */
-      struct varInfo scalar vi
-
-      /* Over Information */
+      struct varInfo  scalar vi
+      struct statInfo scalar si
+      struct options  scalar opt
       struct overInfo scalar oi
-
-      /* Options */
-      struct options scalar opt
-
-      /* Stats */
-      struct stats scalar st
-
-      /* Results */
-      struct results matrix res
-
-      /* Excel */
-      struct excel scalar xl
-
-      /* Code List */
-      string matrix code_list
     }
 
-  /* struct - varInfo */
+/*======================================================================*/
+/*   Mata Structure - options                                           */
+/*======================================================================*/
 
-    struct varInfo
-    {
-      /* Counts */
-      real scalar var_count
-      real scalar series_count
-
-      /* Names */
-      string matrix name_original
-      string matrix name_variable
-
-      /* Series */
-      string matrix series_name
-      string matrix series_label
-      real   matrix series_position
-      string matrix series_status
-
-      /* Display */
-      string matrix display_name
-      string matrix display_series
-    }
-
-  /* struct - overInfo */
-
-    struct overInfo
-    {
-      /* List */
-      string matrix list
-
-      /* Count */
-      real scalar count
-
-      /* Names */
-      string matrix name_short
-      string matrix name_long
-      string matrix name_select
-
-      /* Freqs */
-      real matrix freqs
-    }
-
-  /* struct - options */
+  /* struct : options */
 
     struct options
     {
-      /* Survey */
-      real scalar survey
+      struct options_display scalar display
+      struct options_over    scalar over
+      struct options_test    scalar test
+      struct options_weight  scalar weight
+      struct options_excel   scalar excel
+    }
 
-      /* Subpop */
-      string scalar subpop
+  /* struct : options_display */
 
-      /* Over */
-      real scalar ovo_labels
-      real scalar ovo_legend
-      real scalar ovo_miss
-      real scalar ovo_sep
-      real scalar ovo_total
+    struct options_display
+    {
+      /* XI & Series */
+      real   scalar xi_values, xi_variables
+      real   scalar series_values, series_variables
 
-      /* P-Values */
-      real   scalar    pval_type
-      real   scalar    pval_show
-      real   scalar    pval_force
-      string scalar    pval_mtest
-      real   rowvector pval_stars
-      real   scalar    pval_scripts
+      /* Sort */
+      string scalar sort_direction, sort_statistic
 
-      /* Confidence Intervals */
-      real   scalar ci_proportion
-      real   scalar ci_combined
-      string scalar ci_notation
-      string scalar ci_separator
-      real   scalar ci_round
-      real   scalar ci_level
+      /* Table */
+      real   scalar print, wide, separator
+      string scalar align
+    }
+
+  /* struct : options_over */
+
+    struct options_over
+    {
+      /* Estimation */
+      real scalar miss, total
 
       /* Display */
-      real   scalar dis_xivals
-      real   scalar dis_xivars
-      real   scalar dis_seriesvals
-      real   scalar dis_seriesvars
-      real   scalar dis_percent
-      real   scalar dis_round
-      real   scalar dis_wide
-      real   scalar dis_footer
-      string scalar dis_align
-      string scalar dis_title
-      real   scalar dis_print
+      real scalar group_n, labels, legend
     }
 
-  /* struct - stats */
+  /* struct : options_test */
 
-    struct stats
+    struct options_test
     {
-      /* Names */
-      string matrix name_short
-      string matrix name_long
-      string matrix name_abbrev
+      /* P-Values */
+      real   scalar    overall, individual, statistic
 
-      /* Column Size */
-      string matrix col_format
-      real   matrix col_length
+      /* Chi2 Test */
+      real   scalar    chi_overall
 
-      /* Count */
-      real scalar count
+      /* T-Test */
+      real   scalar    t_overall, t_individual
+
+      /* F-Test */
+      real   scalar    f_overall, f_individual
+      string scalar    f_mtest
+
+      /* Significance Notation */
+      real   scalar    footer, force
+      real   rowvector stars
+      real   scalar    scripts
+      real   matrix    letters
     }
 
-  /* struct - results */
+  /* struct : options_weight */
 
-    struct results
+    struct options_weight
     {
-      /* Variable Information */
-      string scalar name_original
-      string scalar name_variable
-
-      /* Series Information */
-      string scalar series_name
-      string scalar series_label
-      real   scalar series_position
-      string scalar series_status
-
-      /* Display Information */
-      string matrix display_name
-      string matrix display_series
-
-      /* Over Information */
-      string matrix over_labels
-
-      /* Binary */
-      real scalar binary
-
-      /* Values */
-      real matrix vals_obs
-      real matrix vals_nyes
-      real matrix vals_mean
-      real matrix vals_se
-      real matrix vals_t
-      real matrix vals_ci
-      real matrix vals_df
-      real matrix vals_sd
-      real matrix vals_var
-      real matrix vals_povr
-      real matrix vals_pind
-      real matrix vals_minmax
-
-      /* Postscripts */
-      string matrix ps_stars
-      string matrix ps_scripts
+      real   scalar survey
+      string scalar subpop
     }
 
-  /* struct - excel */
+  /* struct : options_excel */
 
-    struct excel
+    struct options_excel
     {
       /* Command Information */
-      real scalar output
-      real scalar bookreplace
-      real scalar sheetreplace
+      real   scalar output
+      real   scalar bookreplace, sheetreplace
 
       /* File Information */
-      string scalar file_path
-      string scalar sheet
+      string scalar file_path, sheet
 
-      /* Style */
-      string scalar style
+      /* Style Information */
+      string matrix color
+      string scalar font_face
+      real   scalar font_size
     }
 
-  end
-
-**======================================================================**
-**   Mata Structure - braddev                                           **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* newBraddev() */
-
-    struct braddev scalar newBraddev()
-    {
-      struct braddev scalar bd
-
-      /* Options */
-
-        bd.opt = getOptions()
-
-      /* Variable Information */
-
-        bd.vi = getVarInfo(bd)
-
-      /* Over Information */
-
-        bd.oi = overInfo()
-        bd.oi.count = 0
-
-      /* Excel */
-
-        bd.xl = parseExcel()
-
-      /* Code List */
-
-        bd.code_list = uchar(7468), uchar(7470), uchar(7472), uchar(7473), uchar(7475), uchar(7476)
-        bd.code_list = bd.code_list, uchar(7477), uchar(7478), uchar(7479), uchar(7480), uchar(7481), uchar(7482)
-        bd.code_list = bd.code_list, uchar(7484), uchar(7486), uchar(7487), uchar(7488), uchar(7489), uchar(7490)
-
-      return(bd)
-    }
-
-  end
-
-**======================================================================**
-**   Mata Structure - varInfo                                           **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* getVarInfo() */
-
-    struct varInfo scalar getVarInfo(struct braddev scalar input_bd)
-    {
-      struct varInfo scalar vi
-
-      /* Initalizing Term List */
-
-        term_list = st_local("0")
-        if(strpos(term_list, ",") != 0) term_list = substr(term_list, 1, strpos(term_list, ",") - 1)
-        term_list = subinstr(term_list, st_local("if"), "", .)
-        term_list = subinstr(term_list, st_local("in"), "", .)
-        term_list = tokens(term_list)
-
-      /* Initalizing Variable List */
-
-        var_list = tokens(st_local("varlist"))
-
-      /* Removing Strings */
-
-        stata("qui ds " + st_local("varlist") + ", has(type string)")
-        stata("local stringlist = r(varlist)")
-
-        if(st_local("stringlist") != ".")
-        {
-          string_list = tokens(st_local("stringlist"))
-          var_list = select(var_list, !inlist(var_list, string_list))
-        }
-
-        if(cols(var_list) == 0)
-        {
-          printf("{error:0 numeric variables in varlist}\n")
-          exit(109)
-        }
-
-      /* Getting Initial Variable Information */
-
-        stata("local xivars : char _dta[__xi__Vars__To__Drop__]")
-        xivars = st_local("xivars") == "" ? "" : tokens(st_local("xivars"))
-
-        var_labels    = J(1, cols(var_list), "")
-        var_types     = J(1, cols(var_list), "")
-        var_answers   = J(1, cols(var_list), "")
-        var_questions = J(1, cols(var_list), "")
-        var_series    = J(1, cols(var_list), "")
-        var_positions = J(1, cols(var_list), .)
-
-        for(i=1; i<=cols(var_list); i++)
-        {
-          /* Individual */
-
-            var_labels[1,i]  = st_varlabel(var_list[1,i])
-            var_types[1,i]   = "individual"
-            var_series[1,i]  = var_list[1,i]
-
-          /* XI Variable */
-
-            if(inlist(var_list[1,i], xivars))
-            {
-              curr_label = tokens(subinstr(var_labels[1,i], "==", " "))
-
-              var_types[1,i]     = "xi"
-              var_answers[1,i]   = var_labels[1,i]
-              var_questions[1,i] = st_varlabel(curr_label[1,1])
-              var_series[1,i]    = curr_label[1,1]
-              if(input_bd.opt.dis_xivals == 1) var_positions[1,i] = 0
-
-              if(st_varvaluelabel(curr_label[1,1]) != "")
-              {
-                answer = st_vlmap(st_varvaluelabel(curr_label[1,1]), strtoreal(curr_label[1,2]))
-                if(answer != "") var_answers[1,i] = answer
-              }
-
-              continue
-            }
-
-          /* Series Variable */
-
-            if(strpos(var_labels[1,i], "]") > strpos(var_labels[1,i], "[") & strpos(var_labels[1,i], "[") != 0)
-            {
-              curr_label = var_labels[1,i]
-
-              var_types[1,i]     = "series"
-              var_answers[1,i]   = substr(curr_label, strpos(curr_label, "[") + 1, strpos(curr_label, "]") - strpos(curr_label, "[") - 1)
-              var_questions[1,i] = substr(curr_label, strpos(curr_label, "]") + 1)
-              if(input_bd.opt.dis_seriesvals) var_positions[1,i] = 0
-
-              continue
-            }
-        }
-
-      /* Cut-off Questions */
-
-        if(max(udstrlen(var_labels)) :== 80)
-        {
-          cutoff = selectindex(udstrlen(var_labels) :== 80)
-          for(i=1; i<=cols(cutoff); i++)
-          {
-            matches = selectindex(strpos(var_questions, var_questions[1,cutoff[1,i]]) :& (udstrlen(var_labels) :!= 80))
-            if(cols(matches) > 0)
-            {
-              var_questions[1,cutoff[1,i]] = var_questions[1,matches[1,1]]
-            }
-          }
-        }
-
-      /* Constructing Series */
-
-        series_list = select(var_questions, var_types :== "series")
-        series_list = uniqrows(series_list')'
-
-        for(i=1; i<=cols(series_list); i++)
-        {
-          series_vars  = select(var_list, var_questions :== series_list[1,i])
-          series_index = selectindex(var_questions :== series_list[1,i])
-
-          if(cols(series_index) == 1)
-          {
-            var_series[1,series_index[1,1]] = var_list[1,series_index[1,1]]
-            continue
-          }
-
-          series_name  = commonString(series_vars)
-          for(j=1; j<=cols(series_index); j++)
-          {
-            var_series[1,series_index[1,j]] = series_name
-          }
-        }
-
-      /* Setting Series Position */
-
-        if(input_bd.opt.dis_xivals)
-        {
-          series_vars = uniqrows(select(var_series, var_types :== "xi")')'
-
-          for(i=1; i<=cols(series_vars); i++)
-          {
-            series_index = vectorIndex(selectindex(var_series :== series_vars[1,i]))
-
-            for(j=1; j<=rows(series_index); j++)
-            {
-              var_positions[1,series_index[j,1]] = 1
-              var_positions[1,series_index[j,2]] = -1
-            }
-          }
-        }
-
-        if(input_bd.opt.dis_seriesvals)
-        {
-          series_vars = uniqrows(select(var_series, var_types :== "series")')'
-
-          for(i=1; i<=cols(series_vars); i++)
-          {
-            series_index = vectorIndex(selectindex(var_series :== series_vars[1,i]))
-
-            for(j=1; j<=rows(series_index); j++)
-            {
-              var_positions[1,series_index[j,2]] = -1
-              var_positions[1,series_index[j,1]] = 1
-            }
-          }
-        }
-
-      /* Setting Variable Names & Series Labels */
-
-        display_name   = J(1, cols(var_list), "")
-        display_series = J(1, cols(var_list), "")
-
-        for(i=1; i<=cols(var_list); i++)
-        {
-          if(var_types[1,i] == "individual")
-          {
-            display_name[1,i]   = var_list[1,i]
-            display_series[1,i] = var_list[1,i]
-            continue
-          }
-
-          if(var_types[1,i] == "xi")
-          {
-            if(input_bd.opt.dis_xivals) display_name[1,i] = var_answers[1,i]
-            else                        display_name[1,i] = var_list[1,i]
-
-            if(input_bd.opt.dis_xivars) display_series[1,i] = var_questions[1,i]
-            else                        display_series[1,i] = var_series[1,i]
-
-            if(display_series[1,i] == "") display_series[1,i] = var_series[1,i]
-
-            continue
-          }
-
-          if(var_types[1,i] == "series")
-          {
-            if(input_bd.opt.dis_seriesvals) display_name[1,i] = var_answers[1,i]
-            else                            display_name[1,i] = var_list[1,i]
-
-            if(input_bd.opt.dis_seriesvars) display_series[1,i] = var_questions[1,i]
-            else                            display_series[1,i] = var_series[1,i]
-
-            if(display_series[1,i] == "") display_series[1,i] = var_series[1,i]
-
-            continue
-          }
-        }
-
-        series_count = rows(uniqrows(display_series'))
-
-      /* Cleaning Up */
-
-        var_labels    = usubinstr(var_labels,    "%", "%%", .)
-        var_answers   = usubinstr(var_answers,   "%", "%%", .)
-        var_questions = usubinstr(var_questions, "%", "%%", .)
-        var_series    = usubinstr(var_series,    "%", "%%", .)
-
-      /* Placing Values */
-
-        st_local("varlist", invtokens(var_list))
-
-        /* Counts */
-        vi.var_count    = cols(var_list)
-        vi.series_count = series_count
-
-        /* Names */
-        vi.name_original = var_list
-        vi.name_variable = var_answers
-
-        /* Series */
-        vi.series_name = var_series
-        vi.series_label = var_questions
-        vi.series_position = var_positions
-        vi.series_status = var_types
-
-        /* Display */
-        vi.display_name   = display_name
-        vi.display_series = display_series
-
-      return(vi)
-    }
-
-  end
-
-**======================================================================**
-**   Mata Structure - overInfo                                          **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* getOverInfo() */
-
-    struct overInfo scalar getOverInfo(struct braddev scalar input_bd)
-    {
-      struct overInfo scalar oi
-
-      /* List */
-
-        oi.list = tokens(st_local("over"))
-
-      /* Count */
-
-        oi.count = strtoreal(st_local("over_count"))
-
-      /* Names */
-
-        st_vlload(st_varvaluelabel(st_local("group_var")), values, text)
-        oi.name_short  = ("_over_" :+ strofreal(values))
-        oi.name_long   = subinstr(strtrim(substr(text, strpos(text, " "), strlen(text))), ".", "")
-        oi.name_select = input_bd.opt.ovo_labels ? oi.name_long : oi.name_short
-
-      /* Freqs */
-
-        stata("qui tab " + st_local("group_var") + ", matcell(" + st_local("freqs") + ")")
-        oi.freqs = st_matrix(st_local("freqs"))
-
-      return(oi)
-    }
-
-  end
-
-**======================================================================**
-**   Mata Structure - options                                           **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* getOptions() */
+  /* function : getOptions() */
 
     struct options scalar getOptions()
     {
       struct options scalar opt
 
-      /* Defaults */
+      /* Display */
 
-        /* Survey */
-        opt.survey = 0
+        /* Defaults */
 
-        /* Subpop */
-        opt.subpop = ""
+          /* XI & Series */
+          opt.display.xi_values    = opt.display.series_values    = 1
+          opt.display.xi_variables = opt.display.series_variables = 0
 
-        /* Over */
-        opt.ovo_labels = 1
-        opt.ovo_legend = 1
-        opt.ovo_miss   = 1
-        opt.ovo_sep    = 0
-        opt.ovo_total  = 0
+          /* Sort */
+          opt.display.sort_direction = "-"
+          opt.display.sort_statistic = ""
 
-        /* P-Values */
-        opt.pval_type  = 1
-        opt.pval_force = 0
-        opt.pval_mtest = "noadjust"
+          /* Table */
+          opt.display.print     = 1
+          opt.display.wide      = 0
+          opt.display.separator = 1
+          opt.display.align     = "lalign"
 
-        /* Confidence Intervals */
-        opt.ci_proportion = 0
-        opt.ci_combined   = 0
-        opt.ci_notation   = "[]"
-        opt.ci_separator  = ","
-        opt.ci_round      = 7
-        opt.ci_level      = strtoreal(st_global("S_level"))
+        /* Parsing - display */
 
-        /* Display */
-        opt.dis_xivals     = 1
-        opt.dis_xivars     = 0
-        opt.dis_seriesvals = 0
-        opt.dis_seriesvars = 0
-        opt.dis_percent    = 0
-        opt.dis_round      = 7
-        opt.dis_wide       = 0
-        opt.dis_footer     = 1
-        opt.dis_align      = "lalign"
-        opt.dis_title      = ""
-        opt.dis_print      = 1
+          input_string = st_local("display")
 
-      /* Parsing */
+          t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
+          tokenset(t, input_string)
 
-        opt = parseOptions(opt)
-
-      return(opt)
-    }
-
-  /* parseOptions() */
-
-    struct options scalar parseOptions(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
-
-      opt = parseSurvey(opt)
-      opt = parseSubpop(opt)
-      opt = parseOver(opt)
-      opt = parsePvalue(opt)
-      opt = parseCI(opt)
-      opt = parseDisplay(opt)
-
-      return(opt)
-    }
-
-  /* parseSurvey() */
-
-    struct options scalar parseSurvey(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
-
-      opt.survey = st_local("svy") != ""
-
-      if(opt.survey == 1)
-      {
-        stata("cap noi _svy_newrule")
-        stata("local _ec = _rc")
-        if(st_local("_ec") != "0") exit(119)
-      }
-
-      return(opt)
-    }
-
-  /* parseSubpop() */
-
-    struct options scalar parseSubpop(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
-
-      input_string = st_local("subpop")
-
-      if(input_string != "")
-      {
-        stata("qui levelsof " + input_string + ", local(lvls)")
-        levels = st_local("lvls")
-
-        if(levels == "0 1" | levels == "1")
-        {
-          opt.subpop = input_string
-          opt.survey = 1
-          stata("cap noi _svy_newrule")
-          stata("local _ec = _rc")
-          if(st_local("_ec") != "0") exit(119)
-        }
-        else
-        {
-          printf("{error:Subpop requires a 0/1 variable}\n")
-          exit(119)
-        }
-
-        st_local("lvls", "")
-      }
-
-      return(opt)
-    }
-
-  /* parseOver() */
-
-    struct options scalar parseOver(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
-
-      input_string = st_local("overopt")
-
-      t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
-      tokenset(t, input_string)
-
-      while((token = tokenget(t)) != "")
-      {
-        if(strpos(token, "nolab")  == 1) { opt.ovo_labels = 0; continue; }
-        if(strpos(token, "noleg")  == 1) { opt.ovo_legend = 0; continue; }
-        if(strpos(token, "nomiss") == 1) { opt.ovo_miss   = 0; continue; }
-        if(strpos(token, "sep")    == 1) { opt.ovo_sep    = 1; continue; }
-        if(strpos(token, "tot")    == 1) { opt.ovo_total  = 1; continue; }
-      }
-
-      return(opt)
-    }
-
-  /* parsePvalue() */
-
-    struct options scalar parsePvalue(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
-
-      input_string = st_local("pvalues")
-
-      t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
-      tokenset(t, input_string)
-
-      while((token = tokenget(t)) != "")
-      {
-        if(strpos(token, "all")   == 1) { opt.pval_type  = 2; continue; }
-        if(strpos(token, "ind")   == 1) { opt.pval_type  = 2; continue; }
-        if(strpos(token, "over")  == 1) { opt.pval_type  = 1; continue; }
-        if(strpos(token, "none")  == 1) { opt.pval_type  = 0; continue; }
-        if(strpos(token, "force") == 1) { opt.pval_force = 1; continue; }
-
-        /* mtest */
-
-          if(token == "mtest")
+          while((token = tokenget(t)) != "")
           {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)'
-              if(strpos(token, "b") == 1) { opt.pval_mtest = "bonferroni"; continue; }
-              if(strpos(token, "h") == 1) { opt.pval_mtest = "holm";       continue; }
-              if(strpos(token, "s") == 1) { opt.pval_mtest = "sidak";      continue; }
-            }
-            continue
-          }
+            token = strlower(token)
 
-        /* stars */
+            /* XI & Series */
 
-          if(strpos(token, "star") == 1)
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              values = strtoreal(tokens(token))
-              values = sort(values', 1)'
-              values = select(values, ((values :> 0) :& (values :< 1)))
-              if(cols(values) > 3)  opt.pval_stars = values[., (1..3)]
-              if(cols(values) != 0) opt.pval_stars = values
-            }
-            else
-            {
-              opt.pval_stars = (0.01, 0.05)
-            }
-            continue
-          }
+              if(token == "xi")   { opt.display.xi_values = opt.display.xi_variables = 1; continue; }
+              if(token == "noxi") { opt.display.xi_values = opt.display.xi_variables = 0; continue; }
 
-        /* script */
+              if(strpos(token, "xival") == 1)   { opt.display.xi_values = 1;    continue; }
+              if(strpos(token, "noxival") == 1) { opt.display.xi_values = 0;    continue; }
+              if(strpos(token, "xivar") == 1)   { opt.display.xi_variables = 1; continue; }
+              if(strpos(token, "noxivar") == 1) { opt.display.xi_variables = 0; continue; }
 
-          if(strpos(token, "script") == 1)
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              values = strtoreal(tokens(token))
-              values = sort(values', 1)'
-              values = select(values, ((values :> 0) :& (values :< 1)))
-              if(cols(values) != 0) opt.pval_scripts = values[1,1]
-            }
-            else
-            {
-              opt.pval_scripts = 0.05
-            }
-            continue
-          }
-      }
+              if(token == "series")   { opt.display.series_values = opt.display.series_variables = 1; continue; }
+              if(token == "noseries") { opt.display.series_values = opt.display.series_variables = 0; continue; }
 
-      return(opt)
-    }
+              if(strpos(token, "seriesval") == 1)   { opt.display.series_values = 1;    continue; }
+              if(strpos(token, "noseriesval") == 1) { opt.display.series_values = 0;    continue; }
+              if(strpos(token, "seriesvar") == 1)   { opt.display.series_variables = 1; continue; }
+              if(strpos(token, "noseriesvar") == 1) { opt.display.series_variables = 0; continue; }
 
-  /* parseCI() */
+            /* Table */
 
-    struct options scalar parseCI(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
+              if(token == "print")   { opt.display.print = 1; continue; }
+              if(token == "noprint") { opt.display.print = 0; continue; }
 
-      input_string = st_local("ci")
+              if(strpos(token, "sep") == 1)   { opt.display.separator = 1; continue; }
+              if(strpos(token, "nosep") == 1) { opt.display.separator = 0; continue; }
 
-      t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
-      tokenset(t, input_string)
+              if(token == "wide") { opt.display.wide = 1; continue; }
+              if(token == "long") { opt.display.wide = 0; continue; }
 
-      while((token = tokenget(t)) != "")
-      {
-        if(strpos(token, "prop") == 1) { opt.ci_proportion = 1;    continue; }
-        if(strpos(token, "log") == 1)  { opt.ci_proportion = 1;    continue; }
-        if(strpos(token, "comb") == 1) { opt.ci_combined   = 1;    continue; }
-        if(strpos(token, "par")  == 1) { opt.ci_notation   = "()"; continue; }
-        if(strpos(token, "brac") == 1) { opt.ci_notation   = "[]"; continue; }
-
-        /* level */
-
-          if(strpos(token, "lev") == 1)
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              values = strtoreal(tokens(token))
-              values = trunc(values[1,1])
-              if(values > 0 & values < 100) opt.ci_level = values
-            }
-            continue
-          }
-
-        /* round */
-
-          if(token == "round")
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              values = strtoreal(tokens(token))
-              values = trunc(values[1,1])
-              if(values >= 0 & values <= 7) opt.ci_round = values
-            }
-            continue
-          }
-
-        /* separator */
-
-          if(strpos(token, "sep") == 1)
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              token = strtrim(token)
-              if(token == "-" | token == ",") opt.ci_separator = token
-            }
-            continue
-          }
-      }
-
-      return(opt)
-    }
-
-  /* parseDisplay() */
-
-    struct options scalar parseDisplay(struct options scalar input)
-    {
-      struct options scalar opt
-      opt = input
-
-      input_string = st_local("display")
-
-      t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
-      tokenset(t, input_string)
-
-      while((token = tokenget(t)) != "")
-      {
-        if(strpos(token, "pct")    == 1)  { opt.dis_percent = 1; continue; }
-        if(strpos(token, "per")    == 1)  { opt.dis_percent = 1; continue; }
-        if(strpos(token, "wide")   == 1)  { opt.dis_wide    = 1; continue; }
-        if(strpos(token, "nofo")   == 1)  { opt.dis_footer  = 0; continue; }
-        if(strpos(token, "noprint") == 1) { opt.dis_print   = 0; continue; }
-
-        /* xi & series */
-
-          if(token == "xi")   { opt.dis_xivals = 1; opt.dis_xivars = 1; continue; }
-          if(token == "noxi") { opt.dis_xivals = 0; opt.dis_xivars = 0; continue; }
-
-          if(strpos(token, "xival")   == 1) {opt.dis_xivals = 1; continue; }
-          if(strpos(token, "xivar")   == 1) {opt.dis_xivars = 1; continue; }
-          if(strpos(token, "noxival") == 1) {opt.dis_xivals = 0; continue; }
-          if(strpos(token, "noxivar") == 1) {opt.dis_xivars = 0; continue; }
-
-          if(token == "series")   { opt.dis_seriesvals = 1; opt.dis_seriesvars = 1; continue; }
-          if(token == "noseries") { opt.dis_seriesvals = 0; opt.dis_seriesvars = 0; continue; }
-
-          if(strpos(token, "seriesval")   == 1) {opt.dis_seriesvals = 1; continue; }
-          if(strpos(token, "seriesvar")   == 1) {opt.dis_seriesvars = 1; continue; }
-          if(strpos(token, "noseriesval") == 1) {opt.dis_seriesvals = 0; continue; }
-          if(strpos(token, "noseriesvar") == 1) {opt.dis_seriesvars = 0; continue; }
-
-        /* align */
-
-          if(strpos(token, "al") == 1)
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              if(strpos(token, "l") == 1) { opt.dis_align = "lalign";   continue; }
-              if(strpos(token, "c") == 1) { opt.dis_align = "center"; continue; }
-              if(strpos(token, "r") == 1) { opt.dis_align = "ralign";  continue; }
-            }
-            continue
-          }
-
-        /* round */
-
-          if(token == "round")
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = substr(token, 2, strlen(token) - 2)
-              values = strtoreal(tokens(token))
-              values = trunc(values[1,1])
-              if(values >= 0 & values <= 7) opt.dis_round = values
-            }
-            continue
-          }
-
-        /* title */
-
-          if(token == "title")
-          {
-            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-            {
-              token = tokenget(t)
-              token = strtrim(substr(token, 2, strlen(token) - 2))
-
-              if(substr(token, 1, 1) == `"""' & substr(token, -1, 1) == `"""')
+              if(strpos(token, "al") == 1)
               {
-                token = strtrim(substr(token, 2, strlen(token) - 2))
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  if(strpos(token, "l") == 1) opt.display.align = "lalign"
+                  if(strpos(token, "c") == 1) opt.display.align = "center"
+                  if(strpos(token, "r") == 1) opt.display.align = "ralign"
+                }
+                continue
               }
-
-              opt.dis_title = token
-            }
-            continue
           }
-      }
 
-      return(opt)
-    }
+        /* Parsing - sort */
 
-  /* cleanOptions() */
+          input_string = strlower(st_local("sort"))
 
-    struct options scalar cleanOptions(struct braddev scalar input_bd)
-    {
-      struct options scalar opt
-      opt = input_bd.opt
+          if(substr(input_string, 1, 1) == "+" | substr(input_string, 1, 1) == "-")
+          {
+            opt.display.sort_direction = substr(input_string, 1, 1)
+            input_string = substr(input_string, 2)
+          }
 
-      /* Wide */
-
-        if(input_bd.oi.count <= 1)
-        {
-          opt.dis_wide = 0
-        }
+          if(inlist(input_string, tokens("obs nyes mean se sd var min max")))
+          {
+            opt.display.sort_statistic = input_string
+          }
 
       /* Over */
 
-        if(input_bd.oi.count == 0)
-        {
-          opt.ovo_total = 0
-        }
+        /* Defaults */
 
-      /* XI & Series */
+          /* Estimation */
+          opt.over.miss  = 1
+          opt.over.total = 0
 
-        if(input_bd.opt.dis_xivars == 1)
-        {
-          input_bd.opt.dis_xivals = 1
-        }
+          /* Display */
+          opt.over.group_n = 0
+          opt.over.labels  = 1
+          opt.over.legend  = 1
 
-        if(input_bd.opt.dis_seriesvars == 1)
-        {
-          input_bd.opt.dis_seriesvals = 1
-        }
+        /* Parsing */
 
-      /* P-Values */
+          input_string = st_local("overopt")
 
-        /* Script + Stars -> Type */
+          t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
+          tokenset(t, input_string)
 
-          if(opt.pval_scripts != .)
+          while((token = tokenget(t)) != "")
           {
-            opt.pval_type = 2
+            token = strlower(token)
+
+            /* Estimation */
+
+              if(strpos(token, "mi") == 1)   { opt.over.miss = 1; continue; }
+              if(strpos(token, "nomi") == 1) { opt.over.miss = 0; continue; }
+
+              if(strpos(token, "tot") == 1)   { opt.over.total = 1; continue; }
+              if(strpos(token, "notot") == 1) { opt.over.total = 0; continue; }
+
+            /* Display */
+
+              if(strpos(token, "group") == 1)   { opt.over.group_n = 1; continue; }
+              if(strpos(token, "nogroup") == 1) { opt.over.group_n = 0; continue; }
+
+              if(strpos(token, "lab") == 1)   { opt.over.labels = 1; continue; }
+              if(strpos(token, "nolab") == 1) { opt.over.labels = 0; continue; }
+
+              if(strpos(token, "leg") == 1)   { opt.over.legend = 1; continue; }
+              if(strpos(token, "noleg") == 1) { opt.over.legend = 0; continue; }
           }
 
-          if(cols(opt.pval_stars) != 0 & opt.pval_type < 1)
+      /* Test */
+
+        /* Defaults */
+
+          /* P-Values */
+          opt.test.overall    = 0
+          opt.test.individual = 0
+          opt.test.statistic  = 0
+
+          /* Chi2 Test */
+          opt.test.chi_overall = 0
+
+          /* T-Test */
+          opt.test.t_overall = opt.test.t_individual = 0
+
+          /* F-Test */
+          opt.test.f_overall    = 0
+          opt.test.f_individual = 0
+          opt.test.f_mtest      = "noadjust"
+
+          /* Significance Notation */
+          opt.test.footer  = 1
+          opt.test.force   = 0
+          opt.test.stars   = J(0, 0, .)
+          opt.test.scripts = .
+          opt.test.letters = (7468,7470,7472,7473,7475,7476,7477,7478,7479,7480,7481,7482,7484,7486,7487,7488,7489,7490)
+
+        /* Parsing */
+
+          input_string = st_local("test")
+
+          t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
+          tokenset(t, input_string)
+
+          while((token = tokenget(t)) != "")
           {
-            opt.pval_type = 1
+            token = strlower(token)
+
+            /* P-Values */
+
+              if(strpos(token, "stat") == 1)   { opt.test.statistic = 1; continue; }
+              if(strpos(token, "nostat") == 1) { opt.test.statistic = 0; continue; }
+              if(strpos(token, "foot")  == 1)  { opt.test.footer    = 1; continue; }
+              if(strpos(token, "nofo")  == 1)  { opt.test.footer    = 0; continue; }
+              if(strpos(token, "force") == 1)  { opt.test.force     = 1; continue; }
+
+            /* Chi2 Test */
+
+              if(strpos(token, "chi") == 1) { opt.test.chi_overall = 1; continue; }
+
+            /* T-Test */
+
+              if(strpos(token, "ttest") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+
+                  if(strpos(token, "a") == 1) { opt.test.t_overall = opt.test.t_individual = 1; continue; }
+                  if(strpos(token, "o") == 1) { opt.test.t_overall                         = 1; continue; }
+                  if(strpos(token, "i") == 1) { opt.test.t_individual                      = 1; continue; }
+                }
+                else
+                {
+                  opt.test.t_overall = 1
+                }
+                continue
+              }
+
+            /* F-Test */
+
+              if(strpos(token, "ftest") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  sub_option = tokenget(t)
+                  sub_option = substr(sub_option, 2, strlen(sub_option) - 2)
+
+                  input_string = tokenrest(t)
+
+                  tokenset(t, sub_option)
+
+                  while((token = tokenget(t)) != "")
+                  {
+                    if(strpos(token, "a") == 1) { opt.test.f_overall = opt.test.f_individual = 1; continue; }
+                    if(strpos(token, "o") == 1) { opt.test.f_overall                         = 1; continue; }
+                    if(strpos(token, "i") == 1) { opt.test.f_individual                      = 1; continue; }
+
+                    if(token == "mtest")
+                    {
+                      if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                      {
+                        token = tokenget(t)
+                        token = substr(token, 2, strlen(token) - 2)
+                        if(strpos(subtoken, "b") == 1) { opt.test.f_mtest = "bonferroni"; continue; }
+                        if(strpos(subtoken, "h") == 1) { opt.test.f_mtest = "holm";       continue; }
+                        if(strpos(subtoken, "s") == 1) { opt.test.f_mtest = "sidak";      continue; }
+                      }
+                      continue
+                    }
+                  }
+
+                  tokenset(t, input_string)
+                }
+                else
+                {
+                  opt.test.f_overall = 1
+                }
+                continue
+              }
+
+            /* Significance Notation */
+
+              if(strpos(token, "star") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+
+                  values = strtoreal(tokens(token))
+                  values = select(values, ((values :> 0) :& (values :< 1)))
+                  values = sort(values', 1)'
+
+                  if(cols(values) > 3)  opt.test.stars = values[., (1..3)]
+
+                  if(cols(values) != 0) opt.test.stars = values
+                  else                  opt.test.stars = (0.01, 0.05)
+                }
+                else
+                {
+                  opt.test.stars = (0.01, 0.05)
+                }
+                continue
+              }
+
+              if(strpos(token, "script") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+
+                  values = strtoreal(tokens(token))
+                  values = select(values, ((values :> 0) :& (values :< 1)))
+
+                  if(cols(values) != 0) opt.test.scripts = min(values)
+                  else                  opt.test.scripts = 0.05
+                }
+                else
+                {
+                  opt.test.scripts = 0.05
+                }
+                continue
+              }
           }
 
-        /* Script (Length) */
+        /* Cleaning Up */
 
-          if(opt.pval_scripts != . & input_bd.oi.count > 18)
+          if(cols(opt.test.stars) > 0)
           {
-            printf("{error:Too many groups for superscripts}\n")
-            opt.pval_scripts = .
+            opt.test.f_overall = 1
           }
 
-        /* Over Count */
-
-          if(input_bd.oi.count == 2 & opt.pval_type == 2)
+          if(opt.test.chi_overall | opt.test.t_overall)
           {
-            opt.pval_type = 1
+            opt.test.f_overall = 1
           }
 
-          if(input_bd.oi.count < 2)
+          if(opt.test.chi_overall | opt.test.t_overall | opt.test.f_overall)
           {
-            opt.pval_type = 0
+            opt.test.overall = 1
           }
 
-        /* Show */
-
-          opt.pval_show = opt.pval_type
-
-          if(opt.pval_show == 2 & opt.pval_scripts != . & opt.pval_force == 0)
+          if(opt.test.scripts != . & !opt.test.t_individual & !opt.test.f_individual)
           {
-            opt.pval_show = 1
+            opt.test.f_individual = 1
           }
 
-          if(opt.pval_show == 1 & cols(opt.pval_stars) != 0 & opt.pval_force == 0)
+          if(opt.test.t_individual | opt.test.f_individual)
           {
-            opt.pval_show = 0
+            opt.test.individual = 1
           }
 
-        /* Scripts + Stars Fix */
+      /* Weight */
 
-          if(opt.pval_type < 2) opt.pval_scripts = .
-          if(opt.pval_type < 1) opt.pval_stars = J(0,0,.)
+        /* Defaults */
 
-      /* CI */
+          opt.weight.survey = 0
+          opt.weight.subpop = ""
 
-        if(opt.pval_scripts != .)
-        {
-          opt.ci_combined = 1
-        }
+        /* Parsing */
 
-        if(opt.ci_round > opt.dis_round)
-        {
-          opt.ci_round = opt.dis_round
-        }
+          if(st_local("svy") != "")
+          {
+            opt.weight.survey = 1
+          }
 
-      /* Footer */
+          if(st_local("subpop") != "")
+          {
+            opt.weight.survey = 1
+            opt.weight.subpop = st_local("subpop")
+          }
 
-        if(input_bd.oi.count == 0)
-        {
-          opt.dis_footer = 0
-        }
+        /* Cleaning Up */
 
-        if(cols(opt.pval_stars) == 0 & opt.pval_scripts == .)
-        {
-          opt.dis_footer = 0
-        }
+          /* Survey */
 
-      /* Print */
+            if(opt.weight.survey)
+            {
+              stata("cap noi _svy_newrule")
 
-        if(input_bd.xl.output == 0)
-        {
-          opt.dis_print = 1
-        }
+              stata("local _ec = _rc")
+              if(st_local("_ec") != "0")
+              {
+                printf("{error:Data is not svyset}\n")
+                exit(119)
+              }
+            }
 
-      /* Title */
+          /* Subpop */
 
-        opt.dis_title = getTitle(input_bd)
+            if(opt.weight.subpop != "")
+            {
+              stata("cap levelsof " + opt.weight.subpop + ", local(lvls)")
+
+              levels = st_local("lvls")
+              if(levels != "0 1" & levels != "1")
+              {
+                printf("{error:Subpop variable must be a 0/1 variable}\n")
+                exit(119)
+              }
+            }
+
+          /* Marker */
+
+            if(opt.weight.survey)
+            {
+              stata("svymarkout " + st_local("touse"))
+            }
+
+      /* Excel */
+
+        /* Defaults */
+
+          /* Command Information */
+          opt.excel.output      = 0
+          opt.excel.bookreplace = opt.excel.sheetreplace = 0
+
+          /* File Information */
+          opt.excel.file_path = pathjoin(c("pwd"), "bradmean_output.xlsx")
+
+          /* Style Information */
+          opt.excel.color     = ("228 223 236", "238 236 225")
+          opt.excel.font_face = "Calibri"
+          opt.excel.font_size = 11
+
+        /* Parsing */
+
+          opt.excel.output = st_local("excel") != ""
+
+          input_string = st_local("excel")
+
+          t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
+          tokenset(t, input_string)
+
+          while((token = tokenget(t)) != "")
+          {
+            token = strlower(token)
+
+            if(strpos(token, "rep")      == 1) { opt.excel.bookreplace  = 1;                          continue; }
+            if(strpos(token, "mod")      == 1) { opt.excel.bookreplace  = opt.excel.sheetreplace = 0; continue; }
+            if(strpos(token, "sheetrep") == 1) { opt.excel.sheetreplace = 1;                          continue; }
+
+            /* File */
+
+              if(strpos(token, "file") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = subinstr(token, `"""', "", .)
+
+                  if(pathsuffix(token) == "")
+                  {
+                    file_path = pathjoin(token, "bradmean_output.xlsx")
+                  }
+                  else
+                  {
+                    if(pathsuffix(token) == ".xlsx" | pathsuffix(token) == ".xls") file_path = token
+                    else                                                           file_path = pathrmsuffix(token) + ".xlsx"
+                  }
+
+                  pathsplit(file_path, path1, path2)
+                  if(direxists(path1) == 0)
+                  {
+                    printf("{error:Directory does not exist, defaulting to " + `"""' + c("pwd") + `"""' + "}\n")
+                    file_path = pathjoin(c("pwd"), path2)
+                  }
+
+                  opt.excel.file_path = file_path
+                }
+                continue
+              }
+
+            /* Sheet */
+
+              if(strpos(token, "sheet") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = subinstr(token, `"""', "", .)
+
+                  opt.excel.sheet = token
+                }
+                continue
+              }
+
+            /* Colors */
+
+              if(strpos(token, "color") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = subinstr(token, `"""', "", .)
+
+                  if(token == "bradfield")       { opt.excel.color = ("228 223 236", "238 236 225"); continue; }
+                  if(token == "material_red")    { opt.excel.color = ("255 235 238", "235 255 252"); continue; }
+                  if(token == "material_purple") { opt.excel.color = ("243 229 245", "231 245 229"); continue; }
+                  if(token == "material_indigo") { opt.excel.color = ("232 234 246", "246 244 232"); continue; }
+                  if(token == "material_blue")   { opt.excel.color = ("227 242 253", "253 238 227"); continue; }
+                  if(token == "material_green")  { opt.excel.color = ("232 245 233", "245 232 244"); continue; }
+                  if(token == "material_orange") { opt.excel.color = ("255 243 224", "224 236 255"); continue; }
+                  if(token == "monochrome")      { opt.excel.color = ("255 255 255", "255 255 255"); continue; }
+                  if(token == "rti")             { opt.excel.color = ("204 220 233", "233 217 204"); continue; }
+                }
+                continue
+              }
+
+            /* Font Face */
+
+              if(strpos(token, "font") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = subinstr(token, `"""', "", .)
+                  token = strlower(token)
+
+                  if(token == "arial")     { opt.excel.font_face = "Arial";           continue; }
+                  if(token == "calibri")   { opt.excel.font_face = "Calibri";         continue; }
+                  if(token == "garamond")  { opt.excel.font_face = "Garamond";        continue; }
+                  if(token == "helvetica") { opt.excel.font_face = "Helvetica";       continue; }
+                  if(token == "tnr")       { opt.excel.font_face = "Times New Roman"; continue; }
+                  if(token == "verdana")   { opt.excel.font_face = "Verdana";         continue; }
+                }
+                continue
+              }
+
+            /* Font Size */
+
+              if(strpos(token, "size") == 1)
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = subinstr(token, `"""', "", .)
+                  token = strtoreal(token)
+
+                  if(token >= 9 & token <= 12) opt.excel.font_size = token
+                }
+                continue
+              }
+
+          }
 
       return(opt)
     }
 
-  end
+/*======================================================================*/
+/*   Mata Structure - varInfo                                           */
+/*======================================================================*/
 
-**======================================================================**
-**   Mata Structure - stats                                             **
-**======================================================================**;
+  /* struct : varInfo */
 
-  #delimit cr
-
-  mata:
-
-  /* getStats() */
-
-    struct stats scalar getStats(struct braddev scalar input_bd)
+    struct varInfo
     {
-      struct stats scalar st
-
-      /* Input */
-
-        st_local("stats_list", "obs nyes mean se sd var ci min max")
-
-        st_local("stats", strtrim(stritrim(strlower(st_local("stats")))))
-        st_local("stats", subinword(st_local("stats"), "all", "obs nyes mean se sd var ci min max"))
-
-        stata("local stats : list uniq stats")
-        stata("local stats : list stats & stats_list")
-
-        st_local("stats_list", "")
-
-      /* Defaults */
-
-        if(st_local("stats") == "")
-        {
-          if(input_bd.opt.dis_wide)
-          {
-            st_local("stats", "mean")
-          }
-          else
-          {
-            st_local("stats", "obs nyes mean sd ci")
-          }
-        }
-
-      /* Processing */
-
-        name_short = ("obs", "nyes", "mean", "se", "ci", "lci", "uci", "sd", "var", "min", "max")
-        name_long  = ("Obs", "n(Yes)", "Mean", "Std Err", "Confidence Interval", "Lower CI", "Upper CI", "Std Dev", "Variance", "Min", "Max")
-
-        if(input_bd.opt.ci_combined == 0)
-        {
-          st_local("stats", subinstr(st_local("stats"), "ci", "lci uci", .))
-        }
-
-        t = tokens(st_local("stats"))
-
-        st.name_short = J(1, cols(t), "")
-        st.name_long  = J(1, cols(t), "")
-
-        for(i=1; i<=cols(t); i++)
-        {
-          st.name_short[1,i] = t[1,i]
-          st.name_long[1,i]  = name_long[1,selectindex(t[1,i] :== name_short)]
-        }
-
-        st.count = cols(st.name_short)
-
-      return(st)
-    }
-
-  /* formatStats() */
-
-    struct stats scalar formatStats(struct braddev scalar input_bd)
-    {
-      struct stats scalar st
-      st = input_bd.st
-
-      st.col_format  = J(1, st.count, "")
-      st.col_length  = J(1, st.count, .)
-      st.name_abbrev = J(1, st.count, "")
-
-      for(i=1; i<=st.count; i++)
-      {
-        if(inlist(st.name_short[1,i], ("obs", "nyes")))
-        {
-          st = formatObs(input_bd, st, st.name_short[1,i], i)
-          continue
-        }
-
-        if(inlist(st.name_short[1,i], ("mean")))
-        {
-          st = formatMean(input_bd, st, st.name_short[1,i], i)
-          continue
-        }
-
-        if(inlist(st.name_short[1,i], ("se", "sd", "var")))
-        {
-          st = formatError(input_bd, st, st.name_short[1,i], i)
-          continue
-        }
-
-        if(inlist(st.name_short[1,i], ("lci", "uci", "ci")))
-        {
-          st = formatCI(input_bd, st, st.name_short[1,i], i)
-          continue
-        }
-
-        if(inlist(st.name_short[1,i], ("min", "max")))
-        {
-          st = formatMinMax(input_bd, st, st.name_short[1,i], i)
-          continue
-        }
-      }
-
-      return(st)
-    }
-
-  /* formatObs() */
-
-    struct stats scalar formatObs(struct braddev scalar input_bd,
-                                  struct stats   scalar input_st,
-                                  string         scalar stat,
-                                  real           scalar pos)
-    {
-      struct stats scalar st
-      st = input_st
-
-      /* Getting Values */
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          if(stat == "obs")  val = input_bd.res[1,i].vals_obs
-          if(stat == "nyes") val = input_bd.res[1,i].vals_nyes
-
-          if(i == 1) values = val
-          else       values = values \ val
-        }
-
-      /* Format & Length */
-
-        length = max(udstrlen(strtrim(strofreal(values, "%9.0fc"))))
-        length = max((length, 5))
-
-        st.col_format[1,pos] = ("%" + strofreal(length) + ".0fc")
-        st.col_length[1,pos] = length
-
       /* Name */
-
-        if(stat == "obs")
-        {
-          st.name_abbrev[1,pos] = "Obs"
-        }
-
-        if(stat == "nyes")
-        {
-          name = "n(Yes)"
-          if(length < udstrlen(name)) name = "n(Y)"
-          st.name_abbrev[1,pos] = name
-        }
-
-      return(st)
-    }
-
-  /* formatMean() */
-
-    struct stats scalar formatMean(struct braddev scalar input_bd,
-                                   struct stats   scalar input_st,
-                                   string         scalar stat,
-                                   real           scalar pos)
-    {
-      struct stats scalar st
-      st = input_st
-
-      /* Getting Values */
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          val = input_bd.res[1,i].vals_mean
-          ps  = input_bd.res[1,i].ps_stars
-          if(inlist(st.name_short, "ci") == 0) ps = ps :+ input_bd.res[1,i].ps_scripts
-
-          if(i==1)
-          {
-            values      = val
-            postscripts = ps
-          }
-          else
-          {
-            values      = values \ val
-            postscripts = postscripts \ ps
-          }
-        }
-
-      /* Percent */
-
-        if(input_bd.opt.dis_percent)
-        {
-          values = values * 100
-          postscripts = cols(postscripts) == 0 ? "%" : "%" :+ postscripts
-          if(input_bd.opt.dis_round > 5) input_bd.opt.dis_round = 5
-        }
-
-      /* Format */
-
-        prefix = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
-        suffix = input_bd.opt.dis_round
-
-        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
-
-      /* Length */
-
-        length = prefix + suffix
-        if(cols(postscripts) > 0) length = length + max(udstrlen(postscripts))
-        length = max((length, 5))
-
-        st.col_length[1,pos] = length
-
-      /* Name */
-
-        st.name_abbrev[1,pos] = "Mean"
-
-      return(st)
-    }
-
-  /* formatError() */
-
-    struct stats scalar formatError(struct braddev scalar input_bd,
-                                    struct stats   scalar input_st,
-                                    string         scalar stat,
-                                    real           scalar pos)
-    {
-      struct stats scalar st
-      st = input_st
-
-      /* Getting Values */
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          if(stat == "se")  val = input_bd.res[1,i].vals_se
-          if(stat == "sd")  val = input_bd.res[1,i].vals_sd
-          if(stat == "var") val = input_bd.res[1,i].vals_var
-
-          if(i==1) values = val
-          else     values = values \ val
-        }
-
-      /* Percent */
-
-        if(input_bd.opt.dis_percent)
-        {
-          values = values * 100
-          if(input_bd.opt.dis_round > 5) input_bd.opt.dis_round = 5
-        }
-
-      /* Format */
-
-        prefix = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
-        suffix = input_bd.opt.dis_round
-
-        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
-
-      /* Length */
-
-        length = prefix + suffix + input_bd.opt.dis_percent
-        length = max((length, 5))
-
-        st.col_length[1,pos] = length
-
-      /* Name */
-
-        if(stat == "se")
-        {
-          name = "Std Err"
-          if(length < udstrlen(name)) name = "SE"
-        }
-
-        if(stat == "sd")
-        {
-          name = "Std Dev"
-          if(length < udstrlen(name)) name = "SD"
-        }
-
-        if(stat == "var")
-        {
-          name = "Variance"
-          if(length < udstrlen(name)) name = "Var"
-        }
-
-        st.name_abbrev[1,pos] = name
-
-      return(st)
-    }
-
-  /* formatCI() */
-
-    struct stats scalar formatCI(struct braddev scalar input_bd,
-                                 struct stats   scalar input_st,
-                                 string         scalar stat,
-                                 real           scalar pos)
-    {
-      struct stats scalar st
-      st = input_st
-
-      /* Getting Values */
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          val = input_bd.res[1,i].vals_ci
-          ps  = input_bd.res[1,i].ps_scripts
-          if(i==1)
-          {
-            values      = val
-            postscripts = ps
-          }
-          else
-          {
-            values      = values \ val
-            postscripts = postscripts \ ps
-          }
-        }
-
-      /* Percent */
-
-        if(input_bd.opt.dis_percent)
-        {
-          values = values * 100
-          if(input_bd.opt.ci_round > 5) input_bd.opt.ci_round = 5
-        }
-
-      /* Format */
-
-        prefix = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
-        suffix = input_bd.opt.dis_round
-
-        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
-
-      /* Length */
-
-        if(input_bd.opt.ci_combined == 0)
-        {
-          length = prefix + suffix + input_bd.opt.dis_percent
-          length = max((length, 4))
-        }
-        else
-        {
-          length = ((prefix + suffix + input_bd.opt.dis_percent) * 2) + 3
-          if(cols(postscripts) > 0) length = length + max(udstrlen(postscripts))
-          length = max((length, 8))
-        }
-
-        st.col_length[1,pos] = length
-
-      /* Name */
-
-        if(stat == "lci")
-        {
-          name = "Lower CI"
-          if(length < udstrlen(name)) name = "LCI"
-        }
-
-        if(stat == "uci")
-        {
-          name = "Upper CI"
-          if(length < udstrlen(name)) name = "UCI"
-        }
-
-        if(stat == "ci")
-        {
-          name = "Confidence Interval"
-          if(length < udstrlen(name)) name = "CI"
-        }
-
-        st.name_abbrev[1,pos] = name
-
-      return(st)
-    }
-
-  /* formatMinMax() */
-
-    struct stats scalar formatMinMax(struct braddev scalar input_bd,
-                                     struct stats   scalar input_st,
-                                     string         scalar stat,
-                                     real           scalar pos)
-    {
-      struct stats scalar st
-      st = input_st
-
-      /* Getting Values */
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          if(i==1) values = input_bd.res[1,i].vals_minmax
-          else     values = values \ input_bd.res[1,i].vals_minmax
-        }
-
-      /* Percent */
-
-        if(input_bd.opt.dis_percent)
-        {
-          values = values * 100
-          if(input_bd.opt.dis_round > 5) input_bd.opt.dis_round = 5
-        }
-
-      /* Format */
-
-        prefix1 = max(udstrlen(strtrim(strofreal(values, "%9.0f")))) + (input_bd.opt.dis_round > 0)
-        suffix1 = input_bd.opt.dis_round
-
-        prefix2 = max(udstrlen(strtrim(strofreal(values, "%9.0f"))))
-        suffix2 = 0
-
-        fmt1 = "%" + strofreal(prefix1 + suffix1) + "." + strofreal(suffix1) + "f"
-        fmt2 = "%" + strofreal(prefix2 + suffix2) + "." + strofreal(suffix2) + "f"
-
-        if(strtoreal(strofreal(values, fmt1)) == strtoreal(strofreal(values, fmt2)))
-        {
-          prefix = prefix2
-          suffix = suffix2
-        }
-        else
-        {
-          prefix = prefix1
-          suffix = suffix1
-        }
-
-        st.col_format[1,pos] = ("%" + strofreal(prefix + suffix) + "." + strofreal(suffix) + "f")
-
-      /* Length */
-
-        length = prefix + suffix + input_bd.opt.dis_percent
-        length = max((length, 5))
-
-        st.col_length[1,pos] = length
-
-      /* Names */
-
-        if(stat == "min")
-        {
-          st.name_abbrev[1,pos] = "Min"
-        }
-
-        if(stat == "max")
-        {
-          st.name_abbrev[1,pos] = "Max"
-        }
-
-      return(st)
-    }
-
-  end
-
-**======================================================================**
-**   Mata Structure - results                                           **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* generateResults() */
-
-    struct results matrix generateResults(struct braddev scalar input_bd)
-    {
-      struct results scalar res
-
-      res_mat = J(1, input_bd.vi.var_count, res)
-
-      for(i=1; i<=input_bd.vi.var_count; i++)
-      {
-        res_mat[1,i] = calculateResults(input_bd, i)
-      }
-
-      return(res_mat)
-    }
-
-  /* calculateResults() */
-
-    struct results scalar calculateResults(struct braddev scalar input_bd,
-                                           real           scalar pos)
-    {
-      struct results scalar res
-      res = results()
+      string scalar term
+      string matrix varlist
 
       /* Information */
+      string scalar type
+      real   scalar binary
 
-        /* Variable Information */
+      /* Description */
+      string matrix answers
+      string scalar question
 
-          res.name_original = input_bd.vi.name_original[1,pos]
-          res.name_variable = input_bd.vi.name_variable[1,pos]
+      /* Results */
+      struct results scalar results
+    }
 
-        /* Series Information */
+  /* function : getVarInfo() */
 
-          res.series_name     = input_bd.vi.series_name[1,pos]
-          res.series_label    = input_bd.vi.series_label[1,pos]
-          res.series_position = input_bd.vi.series_position[1,pos]
-          res.series_status   = input_bd.vi.series_status[1,pos]
+    struct varInfo matrix getVarInfo(struct braddev scalar bd)
+    {
+      struct varInfo matrix vi
+      vi = varInfo(cols(tokens(st_local("0"))), 1)
 
-        /* Display Information */
+      positions = J(rows(vi), 1, 0)
 
-          res.display_name   = input_bd.vi.display_name[1,pos]
-          res.display_series = input_bd.vi.display_series[1,pos]
+      for(i=1; i<=rows(vi); i++)
+      {
+        /* Getting Token */
 
-        /* Binary */
+          token = strtrim(st_local(strofreal(i)))
 
-          stata("qui levelsof " + res.name_original + ", local(logit_lvls)")
-          res.binary = inlist(st_local("logit_lvls"), ("0 1", "0", "1"))
-          st_local("logit_lvls", "")
+          if(token == "if" | token == "in" | token == ",") break
+          if(strpos(token, "#") != 0)                      continue
 
-      /* Checking if All Missing */
+        /* Term */
 
-        stata("qui count if " + st_local("touse") + " & !missing(" + res.name_original + ")")
+          vi[i].term = subinstr(token, ",", "")
 
-        if(st_numscalar("r(N)") == 0)
-        {
-          printf("{error:" + res.name_original + " has no observations in sample.}\n")
+          if(strpos(vi[i].term, ".") != 0) vi[i].term = "i." + substr(vi[i].term, strpos(vi[i].term, ".") + 1)
 
-          group_count = (input_bd.oi.count == 0) ? 1 : (input_bd.oi.count + input_bd.opt.ovo_total)
+        /* Varlist */
 
-          res.vals_obs    = J(group_count, 1, 0)
-          res.vals_mean   = J(group_count, 1, .)
-          res.vals_se     = J(group_count, 1, .)
-          res.vals_t      = J(group_count, 1, .)
-          res.vals_ci     = J(group_count, 2, .)
-          res.vals_df     = J(group_count, 1, .)
-          res.vals_sd     = J(group_count, 1, .)
-          res.vals_var    = J(group_count, 1, .)
-          res.vals_nyes   = J(group_count, 1, .)
-          res.vals_minmax = J(group_count, 2, .)
+          stata("cap ds " + substr(vi[i].term, strpos(vi[i].term, ".") + 1) + ", has(type numeric)")
+          vi[i].varlist = tokens(st_global("r(varlist)"))'
 
-          if(input_bd.oi.count > 0)
-          {
-            res.vals_povr = J(group_count, 1, .)
-            res.vals_pind = J(group_count, input_bd.oi.count, .)
+          if(rows(vi[i].varlist) == 0) continue
 
-            if(cols(input_bd.opt.pval_stars) > 0)
+        /* Type */
+
+          vi[i].type = (rows(vi[i].varlist) > 1) ? "series" : (strpos(vi[i].term, "i.") == 1 ? "xi" : "individual")
+
+          if(strpos(vi[i].term, "i.") == 1) vi[i].type = "xi"
+
+        /* Binary, Answers, and Question */
+
+          /* Individual */
+
+            if(vi[i].type == "individual")
             {
-              res.ps_stars = J(group_count, 1, "")
+              stata("cap count if !missing(" + vi[i].varlist + ") & " + vi[i].varlist + " != 1 & " + vi[i].varlist + " != 0 ")
+              vi[i].binary = st_numscalar("r(N)") == 0
+              vi[i].answers = vi[i].varlist
+
+              vi[i].question = st_varlabel(vi[i].varlist)
+              if(vi[i].question == "") vi[i].question = vi[i].term
             }
 
-            if(input_bd.opt.pval_scripts != .)
+          /* XI */
+
+            if(vi[i].type == "xi")
             {
-              res.ps_scripts = J(group_count, 1, "")
+              vi[i].binary = 1
+
+              vi[i].question = st_varlabel(vi[i].varlist)
+              if(vi[i].question == "") vi[i].question = vi[i].term
+
+              stata("cap levelsof " + vi[i].varlist + ", local(levels)")
+              levels = tokens(st_local("levels"))'
+
+              vi[i].varlist = vi[i].varlist :+ "==" :+ levels
+
+              if(st_varvaluelabel(substr(vi[i].term, 3)) == "" | !bd.opt.display.xi_values)
+              {
+                vi[i].answers = vi[i].varlist
+              }
+              else
+              {
+                vi[i].answers = st_vlmap(st_varvaluelabel(substr(vi[i].term, 3)), strtoreal(levels))
+                vi[i].answers[selectindex(vi[i].answers :== "")] = vi[i].varlist[selectindex(vi[i].answers :== "")]
+              }
+            }
+
+          /* Series */
+
+            if(vi[i].type == "series")
+            {
+              vi[i].binary = 1
+              descriptions = J(rows(vi[i].varlist), 1, "")
+
+              for(j=1; j<=rows(vi[i].varlist); j++)
+              {
+                descriptions[j] = st_varlabel(vi[i].varlist[j])
+
+                if(vi[i].binary == 1)
+                {
+                  stata("cap count if !missing(" + vi[i].varlist[j] + ") & " + vi[i].varlist[j] + " != 1 & " + vi[i].varlist[j] + " != 0 ")
+                  if(st_numscalar("r(N)") > 0) vi[i].binary = 0
+                }
+              }
+
+              vi[i].answers = substr(descriptions, strpos(descriptions, "[") :+ 1, strpos(descriptions, "]") :- 2)
+              vi[i].answers[selectindex(vi[i].answers :== "")] = vi[i].varlist[selectindex(vi[i].answers :== "")]
+
+              descriptions = strtrim(substr(descriptions, strpos(descriptions, "]") :+ 1))
+
+              vi[i].question = select(descriptions, udstrlen(descriptions) :== max(udstrlen(descriptions)))[1]
+
+              if(!bd.opt.display.series_values) vi[i].answers = vi[i].varlist
+            }
+
+        /* Position */
+
+          positions[i] = 1
+
+          if(substr(token, -1, 1) == ",") break
+      }
+
+      vi = select(vi, positions)
+
+      return(vi)
+    }
+
+/*======================================================================*/
+/*   Mata Structure - overInfo                                          */
+/*======================================================================*/
+
+  /* struct : overInfo */
+
+    struct overInfo
+    {
+      /* Name */
+      string scalar name
+      string matrix varlist
+
+      /* Levels & Frequencies */
+      real   matrix levels, freqs
+      string matrix labels
+    }
+
+  /* function : getOverInfo() */
+
+    struct overInfo scalar getOverInfo(struct braddev scalar bd)
+    {
+      struct overInfo scalar oi
+
+      if(st_local("over") == "")
+      {
+        bd.opt.test.overall    = 0
+        bd.opt.test.individual = 0
+        bd.opt.display.wide    = 0
+        return(oi)
+      }
+
+      oi.varlist = tokens(st_local("over"))
+      oi.name    = st_tempname()
+
+      /* Marking Out Variables */
+
+        if(!bd.opt.over.miss)
+        {
+          varlist = ""
+          for(i=1; i<=rows(bd.vi); i++)
+          {
+            if(bd.vi[i].type == "xi") varlist = varlist + " " + subinstr(bd.vi[i].term, "i.", "")
+            else                      varlist = varlist + " " + invtokens(bd.vi[i].varlist')
+          }
+
+          stata("cap markout " + st_local("touse") + " " + varlist)
+        }
+
+        stata("cap replace " + st_local("touse") + " = 0 if missing(" + invtokens(oi.varlist, ",") + ")")
+
+      /* Generating Variable */
+
+        group_str = st_tempname()
+        group_num = st_tempname()
+
+        stata("cap egen " + group_str + " = concat(" + st_local("over") + ") if " + st_local("touse") + `", decode punct(", ")"')
+        stata("cap egen " + group_num + " = group("  + st_local("over") + ") if " + st_local("touse"))
+
+        stata("cap levelsof " + group_num + ", local(lvls)")
+        levels = tokens(st_local("lvls"))
+
+        num_format = "%0" + strofreal(max(udstrlen(levels))) + ".0f"
+        num_format = char(34) + num_format + char(34)
+
+        stata("cap replace " + group_str + " = string(" + group_num + ", " + num_format + ") + " + `"" ""' + " + " + group_str + " if " + st_local("touse"))
+        stata("cap encode " + group_str + ", generate(" + oi.name + ")")
+
+        stata("cap drop " + group_str)
+        stata("cap drop " + group_num)
+
+      /* Getting Levels */
+
+        matcell = st_tempname()
+        matrow  = st_tempname()
+
+        stata("cap tab " + oi.name + ", matcell(" + matcell + ") matrow(" + matrow + ")")
+
+        oi.levels = st_matrix(matrow)
+        oi.freqs  = st_matrix(matcell)
+
+        if(bd.opt.over.labels)
+        {
+          oi.labels = st_vlmap(oi.name, oi.levels)
+          oi.labels = strtrim(substr(oi.labels, strpos(oi.labels, " ") :+ 1))
+        }
+        else
+        {
+          oi.labels = "_over_" :+ strofreal(oi.levels)
+        }
+
+        positions = selectindex(oi.labels :== "")
+
+        if(rows(positions) > 0)
+        {
+          oi.labels[positions] = "_over_" :+ strofreal(oi.levels[positions])
+        }
+
+      /* Cleaning Up */
+
+        if(rows(oi.levels) == 1)
+        {
+          bd.opt.over.total      = 0
+          bd.opt.test.overall    = 0
+          bd.opt.test.individual = 0
+        }
+
+        if(rows(oi.levels) != 2)
+        {
+          bd.opt.test.t_overall = 0
+        }
+
+        if(rows(oi.levels) == 2)
+        {
+          if(bd.opt.test.t_individual) bd.opt.test.t_overall = bd.opt.test.overall = 1
+          if(bd.opt.test.f_individual) bd.opt.test.f_overall = bd.opt.test.overall = 1
+          bd.opt.test.individual = 0
+        }
+
+      return(oi)
+    }
+
+/*======================================================================*/
+/*   Mata Structure - statInfo                                          */
+/*======================================================================*/
+
+  /* struct : statInfo */
+
+    struct statInfo
+    {
+      /* Name */
+      string matrix name, label
+
+      /* Format - Rounding */
+      real   matrix roundc, roundi
+
+      /* Format - Notation */
+      real   matrix comma, percent, symbol
+      string matrix notation
+
+      /* Format - P-Values */
+      real   matrix stars, scripts
+
+      /* CI Specific */
+      real   scalar ci_level, ci_proportion
+      real   scalar ci_combined
+      string scalar ci_separator
+    }
+
+  /* function : getStatInfo() */
+
+    struct statInfo scalar getStatInfo(struct braddev scalar bd)
+    {
+      struct statInfo scalar si
+
+      /* Getting Stat List */
+
+        st_local("statlist", "obs nyes mean se sd var lci uci min max")
+        st_local("stats", strlower(subinword(st_local("stats"), "all", "obs nyes mean se sd var lci uci min max")))
+        st_local("stats", subinword(st_local("stats"), "ci", "lci uci"))
+
+        stata("local stats : list uniq stats")
+        stata("local stats : list stats & statlist")
+
+        statlist = tokens(st_local("stats"))'
+
+        if(rows(statlist) == 0)
+        {
+          if(bd.opt.display.wide) statlist = "mean"
+          else                    statlist = tokens("obs nyes mean sd lci uci")'
+        }
+
+      /* Setting Defaults */
+
+        /* Names */
+        si.name  = tokens(st_local("statlist"))'
+        si.label = ("Obs" \ "n(Yes)" \ "Mean" \ "Std Err" \ "Std Dev" \ "Variance" \ "Lower CI" \ "Upper CI" \ "Min" \ "Max")
+
+        /* Format - Rounding */
+        si.roundc = si.roundi = J(10, 1, 7)
+
+        /* Format - Notation */
+        si.comma    = J(10, 1, 1)
+        si.percent  = J(10, 1, 0)
+        si.symbol   = J(10, 1, 1)
+        si.notation = J(10, 2, "")
+
+        /* Format - P-Values */
+        si.stars = si.scripts = J(10, 1, 0)
+        si.stars[3] = 1
+        si.scripts[8] = 1
+
+        /* CI Specific */
+        si.ci_level      = strtoreal(st_global("S_level"))
+        si.ci_proportion = 0
+        si.ci_combined   = 0
+        si.ci_separator  = ","
+
+      /* Parsing Format */
+
+        input_string = st_local("format")
+        name_list    = ("count", "error", "minmax", "ci", "obs", "nyes", "mean", "se", "sd", "var", "lci", "uci", "min", "max")
+
+        t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
+        tokenset(t, input_string)
+
+        while((token = tokenget(t)) != "")
+        {
+          token = strlower(token)
+
+          /* All */
+
+            /* Round */
+
+              if(token == "round")
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = strtoreal(token)
+                  if(token >= 0 & token <= 7) si.roundc = si.roundi = J(10, 1, token)
+                }
+                continue
+              }
+
+            /* RoundC */
+
+              if(token == "roundc" | token == "round_c")
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = strtoreal(token)
+                  if(token >= 0 & token <= 7) si.roundc = J(10, 1, token)
+                }
+                continue
+              }
+
+            /* RoundI */
+
+              if(token == "roundi" | token == "round_i")
+              {
+                if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                {
+                  token = tokenget(t)
+                  token = substr(token, 2, strlen(token) - 2)
+                  token = strtoreal(token)
+                  if(token >= 0 & token <= 7) si.roundi = J(10, 1, token)
+                }
+                continue
+              }
+
+            /* Percent */
+
+              if(token == "pct" | strpos(token, "per") == 1)
+              {
+                si.percent = J(10, 1, 1)
+                continue
+              }
+
+              if(token == "nopct" | strpos(token, "noper") == 1)
+              {
+                si.percent = J(10, 1, 0)
+                continue
+              }
+
+            /* Symbol */
+
+              if(strpos(token, "sym") == 1)
+              {
+                si.symbol = J(10, 1, 1)
+                continue
+              }
+
+              if(strpos(token, "nosym") == 1)
+              {
+                si.symbol = J(10, 1, 0)
+                continue
+              }
+
+          /* Specific Variables - Getting Positions */
+
+            if(!anyof(name_list, token)) continue
+            else                         positions = J(0, 0, .)
+
+            if(token == "count")  positions = (1 \ 2)
+            if(token == "error")  positions = (4 \ 5 \ 6)
+            if(token == "ci")     positions = (7 \ 8)
+            if(token == "minmax") positions = (9 \ 10)
+
+            if(rows(positions) == 0 & cols(positions) == 0)
+            {
+              positions = selectindex(si.name :== token)
+            }
+
+          /* Specific Variables - Checking Options */
+
+            if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+            {
+              sub_option = tokenget(t)
+              sub_option = substr(sub_option, 2, strlen(sub_option) - 2)
+
+              input_string = tokenrest(t)
+
+              tokenset(t, sub_option)
+            }
+
+            while((token = tokenget(t)) != "")
+            {
+              /* Round */
+
+                if(token == "round")
+                {
+                  if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                  {
+                    token = tokenget(t)
+                    token = substr(token, 2, strlen(token) - 2)
+                    token = strtoreal(token)
+                    if(token >= 0 & token <= 7) si.roundc[positions] = si.roundi[positions] = J(rows(positions), cols(positions), token)
+                  }
+                  continue
+                }
+
+              /* RoundC */
+
+                if(token == "roundc" | token == "round_c")
+                {
+                  if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                  {
+                    token = tokenget(t)
+                    token = substr(token, 2, strlen(token) - 2)
+                    token = strtoreal(token)
+                    if(token >= 0 & token <= 7) si.roundc[positions] = J(rows(positions), cols(positions), token)
+                  }
+                  continue
+                }
+
+              /* RoundI */
+
+                if(token == "roundi" | token == "round_i")
+                {
+                  if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                  {
+                    token = tokenget(t)
+                    token = substr(token, 2, strlen(token) - 2)
+                    token = strtoreal(token)
+                    if(token >= 0 & token <= 7) si.roundi[positions] = J(rows(positions), cols(positions), token)
+                  }
+                  continue
+                }
+
+              /* Percent */
+
+                if(token == "pct" | strpos(token, "per") == 1)
+                {
+                  si.percent[positions] = J(rows(positions), cols(positions), 1)
+                  continue
+                }
+
+                if(token == "nopct" | strpos(token, "noper") == 1)
+                {
+                  si.percent[positions] = J(rows(positions), cols(positions), 0)
+                  continue
+                }
+
+              /* Symbol */
+
+                if(strpos(token, "sym") == 1)
+                {
+                  si.symbol[positions] = J(rows(positions), cols(positions), 1)
+                  continue
+                }
+
+                if(strpos(token, "nosym") == 1)
+                {
+                  si.symbol[positions] = J(rows(positions), cols(positions), 0)
+                  continue
+                }
+
+              /* Comma */
+
+                if(token == "comma")
+                {
+                  si.comma[positions] = J(rows(positions), cols(positions), 1)
+                  continue
+                }
+
+                if(token == "nocomma")
+                {
+                  si.comma[positions] = J(rows(positions), cols(positions), 0)
+                  continue
+                }
+
+              /* Stars */
+
+                if(strpos(token, "star") == 1)
+                {
+                  si.stars[positions] = J(rows(positions), cols(positions), 1)
+                  continue
+                }
+
+                if(strpos(token, "nostar") == 1)
+                {
+                  si.stars[positions] = J(rows(positions), cols(positions), 0)
+                  continue
+                }
+
+              /* Scripts */
+
+                if(strpos(token, "script") == 1)
+                {
+                  si.scripts[positions] = J(rows(positions), cols(positions), 1)
+                  continue
+                }
+
+                if(strpos(token, "noscript") == 1)
+                {
+                  si.scripts[positions] = J(rows(positions), cols(positions), 0)
+                  continue
+                }
+
+              /* Notation */
+
+                if(strpos(token, "not") == 1)
+                {
+                  if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                  {
+                    token = tokenget(t)
+                    token = substr(token, 2, strlen(token) - 2)
+
+                    if(strpos(token, "par") == 1) si.notation[positions,.] = J(rows(positions), 1, ("(", ")"))
+                    if(strpos(token, "bra") == 1) si.notation[positions,.] = J(rows(positions), 1, ("[", "]"))
+                  }
+                  continue
+                }
+
+              /* CI Specific */
+
+                if(anyof(positions, 7) | anyof(positions, 8))
+                {
+                  /* Level */
+
+                    if(strpos(token, "lev") == 1 | strpos(token, "lvl") == 1)
+                    {
+                      if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                      {
+                        token = tokenget(t)
+                        token = substr(token, 2, strlen(token) - 2)
+                        token = trunc(strtoreal(token))
+                        if(token > 0 & token < 100) si.ci_level = token
+                      }
+                      continue
+                    }
+
+                  /* Proportion */
+
+                    if(strpos(token, "prop") == 1)
+                    {
+                      si.ci_proportion = 1
+                      continue
+                    }
+
+                  /* Combined */
+
+                    if(strpos(token, "comb") == 1)
+                    {
+                      si.ci_combined = 1
+                      continue
+                    }
+
+                  /* Separator */
+
+                    if(strpos(token, "sep") == 1)
+                    {
+                      if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+                      {
+                        token = tokenget(t)
+                        token = substr(token, 2, strlen(token) - 2)
+                        if(token == "-" | token == ",") si.ci_separator = token
+                      }
+                      continue
+                    }
+                }
+            }
+
+          tokenset(t, input_string)
+        }
+
+      /* Cleaning Format */
+
+        si.comma[(3..8)]   = J(6, 1, 0)
+
+        si.percent[(1..2)] = si.symbol[(1..2)] = J(2, 1, 0)
+        si.roundc[(1..2)]  = si.roundi[(1..2)] = J(2, 1, 0)
+
+        if(rows(bd.oi.levels) > 18)
+        {
+          si.scripts = J(10, 1, 0)
+        }
+
+      /* Selecting Statistics */
+
+        positions = J(rows(statlist), 1, .)
+
+        for(i=1; i<=rows(positions); i++)
+        {
+          positions[i] = selectindex(si.name :== statlist[i])
+        }
+
+        if(si.ci_combined)
+        {
+          positions = select(positions, positions :!= 7)
+        }
+
+        si.name     = si.name[positions]
+        si.label    = si.label[positions]
+        si.roundc   = si.roundc[positions]
+        si.roundi   = si.roundi[positions]
+        si.comma    = si.comma[positions]
+        si.percent  = si.percent[positions]
+        si.symbol   = si.symbol[positions]
+        si.notation = si.notation[positions, .]
+        si.stars    = si.stars[positions]
+        si.scripts  = si.scripts[positions]
+
+        if(si.ci_combined)
+        {
+          positions = selectindex(si.name :== "uci")
+          if(rows(positions) > 0)
+          {
+            si.name[positions] = "ci"
+            si.label[positions] = "Confidence Interval"
+            if(si.notation[positions,1] == "") si.notation[positions,.] = ("[", "]")
+          }
+        }
+
+      return(si)
+    }
+
+/*======================================================================*/
+/*   Mata Structure - results                                           */
+/*======================================================================*/
+
+  /* struct : results */
+
+    struct results
+    {
+      /* Count */
+      real matrix obs, nyes
+
+      /* Mean */
+      real matrix mean
+
+      /* Error */
+      real matrix lci, uci, se, sd, var
+
+      /* MinMax */
+      real matrix min, max
+
+      /* Calculation only */
+      real matrix t, df
+
+      /* P-Values */
+      real matrix ovr_statistic, ovr_pvalue
+      real matrix ind_statistic, ind_pvalue
+    }
+
+  /* function : gatherResults() */
+
+    void gatherResults(struct braddev scalar bd)
+    {
+      for(i=1; i<=rows(bd.vi); i++)
+      {
+        if(bd.vi[i].type == "xi") bd.vi[i].results = calculateXI(bd, i)
+        else                      bd.vi[i].results = calculateSeries(bd, i)
+      }
+
+      if(bd.opt.weight.survey)
+      {
+        bd.opt.test.chi_overall = 0
+      }
+    }
+
+  /* function : calculateXI() */
+
+    struct results scalar calculateXI(struct braddev scalar bd,
+                                      real           scalar vi_position)
+    {
+      struct varInfo scalar vi
+      struct results scalar res
+
+      vi = bd.vi[vi_position]
+
+      /* Defining Results */
+
+        rows = rows(vi.answers)
+
+        if(bd.oi.name == "") groups = 1
+        else                 groups = rows(bd.oi.levels) + bd.opt.over.total
+
+        res.obs = res.nyes = J(rows, groups, 0)
+        res.mean = res.lci = res.uci = res.se = res.sd = res.var = res.min = res.max = res.t = res.df = J(rows, groups, .)
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          cmd_mean = "cap xi, noomit: "
+
+          if(bd.opt.weight.survey)
+          {
+            if(bd.opt.weight.subpop != "") cmd_mean = cmd_mean + "svy, subpop(" + bd.opt.weight.subpop + "): "
+            else                           cmd_mean = cmd_mean + "svy: "
+          }
+
+          cmd_mean = cmd_mean + "mean " + vi.term + " if " + st_local("touse") + ", level(" + strofreal(bd.si.ci_level) + ") "
+
+          if(groups > 1)
+          {
+            cmd_mean = cmd_mean + "over(" + bd.oi.name + ", nolabel)"
+          }
+
+        /* Count, Min, & Max */
+
+          cmd_count = "cap xi, noomit: tabstat " + vi.term + " if " + st_local("touse") + ", stat(sum min max) save"
+          if(groups > 1) cmd_count = cmd_count + " by(" + bd.oi.name + ")"
+
+      /* Calculating Results (1) */
+
+        /* Mean */
+
+          stata(cmd_mean)
+
+          pos = 1
+          if(groups > 1) pos = strtoreal(tokens(st_global("e(over_namelist)")))
+
+          res.mean[.,pos] = rowshape(st_matrix("r(table)")[1,.], rows)
+          res.se[.,pos]   = rowshape(st_matrix("r(table)")[2,.], rows)
+          res.t[.,pos]    = rowshape(st_matrix("r(table)")[3,.], rows)
+          res.lci[.,pos]  = rowshape(st_matrix("r(table)")[5,.], rows)
+          res.uci[.,pos]  = rowshape(st_matrix("r(table)")[6,.], rows)
+          res.df[.,pos]   = rowshape(st_matrix("r(table)")[7,.], rows)
+
+          if(bd.opt.weight.subpop == "") res.obs[.,pos] = rowshape(st_matrix("e(_N)"), rows)
+          else                           res.obs[.,pos] = rowshape(st_matrix("e(_N_subp)"), rows)
+
+        /* SD & Var */
+
+          stata("cap estat sd")
+
+          res.sd[.,pos]  = rowshape(st_matrix("r(sd)"), rows)
+          res.var[.,pos] = rowshape(st_matrix("r(variance)"), rows)
+
+        /* Count, Min, & Max */
+
+          stata(cmd_count)
+
+          if(groups == 1)
+          {
+            res.nyes[.,1] = st_matrix("r(StatTotal)")'[.,1]
+            res.min[.,1]  = st_matrix("r(StatTotal)")'[.,2]
+            res.max[.,1]  = st_matrix("r(StatTotal)")'[.,3]
+          }
+          else
+          {
+            for(i=1; i<=rows(bd.oi.levels); i++)
+            {
+              res.nyes[.,i] = st_matrix("r(Stat" + strofreal(i) + ")")'[.,1]
+              res.min[.,i]  = st_matrix("r(Stat" + strofreal(i) + ")")'[.,2]
+              res.max[.,i]  = st_matrix("r(Stat" + strofreal(i) + ")")'[.,3]
+            }
+
+            if(bd.opt.over.total)
+            {
+              res.nyes[.,groups] = st_matrix("r(StatTotal)")'[.,1]
+              res.min[.,groups]  = st_matrix("r(StatTotal)")'[.,2]
+              res.max[.,groups]  = st_matrix("r(StatTotal)")'[.,3]
             }
           }
 
-          return(res)
+        /* Testing - Individual */
+
+          levels = rows(bd.oi.levels)
+
+          if(bd.opt.test.individual)
+          {
+            res.ind_statistic = res.ind_pvalue = J(rows, rows(bd.oi.levels) * rows(bd.oi.levels), .)
+
+            if(bd.opt.test.t_individual)
+            {
+              for(i=1; i<=rows; i++)
+              {
+                for(j=1; j<=cols(pos); j++)
+                {
+                  for(k=j+1; k<=cols(pos); k++)
+                  {
+                    stata("cap ttesti " + strofreal(res.obs[i,pos[j]]) + " " + strofreal(res.mean[i,pos[j]]) + " " + strofreal(res.sd[i,pos[j]]) + " " + strofreal(res.obs[i,pos[k]]) + " " + strofreal(res.mean[i,pos[k]]) + " " + strofreal(res.sd[i,pos[k]]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                    res.ind_statistic[i,((pos[j] - 1) * levels) + pos[k]] = res.ind_statistic[i,((pos[k] - 1) * levels) + pos[j]] = st_numscalar("r(t)")
+                    res.ind_pvalue[i,((pos[j] - 1) * levels) + pos[k]]    = res.ind_pvalue[i,((pos[k] - 1) * levels) + pos[j]]    = st_numscalar("r(p)")
+                  }
+                }
+              }
+            }
+            else
+            {
+              varlist = tokens(st_global("e(varlist)"))
+              for(i=1; i<=rows; i++)
+              {
+                for(j=1; j<=levels; j++)
+                {
+                  stata("cap test " + "[" + varlist[i] + "]" + strofreal(pos[j]) + " == " + invtokens(("[" + varlist[i] + "]") :+ strofreal(pos), " == ") + ", mtest(" + bd.opt.test.f_mtest + ")")
+                  res.ind_statistic[i,((pos[j] - 1) * levels) :+ pos] = st_matrix("r(mtest)")[.,1]'
+                  res.ind_pvalue[i,((pos[j] - 1) * levels) :+ pos]    = st_matrix("r(mtest)")[.,3]'
+                }
+              }
+            }
+          }
+
+        /* Testing - Overall */
+
+          if(bd.opt.test.overall)
+          {
+            if(bd.opt.test.chi_overall)
+            {
+              if(bd.opt.weight.survey)
+              {
+                if(bd.opt.weight.subpop != "") stata("cap svy, subpop(" + bd.opt.weight.subpop + "): tab " + substr(vi.term, 3) + " " + bd.oi.name)
+                else                           stata("cap svy: tab " + substr(vi.term, 3) + " " + bd.oi.name)
+
+                res.ovr_statistic = J(rows, 1, st_numscalar("e(F_Penl)"))
+                res.ovr_pvalue    = J(rows, 1, st_numscalar("e(p_Penl)"))
+              }
+              else
+              {
+                stata("cap tab " + substr(vi.term, 3) + " " + bd.oi.name + ", chi2")
+                res.ovr_statistic = J(rows, 1, st_numscalar("r(chi2)"))
+                res.ovr_pvalue    = J(rows, 1, st_numscalar("r(p)"))
+              }
+            }
+            else
+            {
+              res.ovr_statistic = res.ovr_pvalue = J(rows, 1, .)
+
+              if(bd.opt.test.t_overall)
+              {
+                for(i=1; i<=rows; i++)
+                {
+                  stata("cap ttesti " + strofreal(res.obs[i,1]) + " " + strofreal(res.mean[i,1]) + " " + strofreal(res.sd[i,1]) + " " + strofreal(res.obs[i,2]) + " " + strofreal(res.mean[i,2]) + " " + strofreal(res.sd[i,2]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                  res.ovr_statistic[i] = st_numscalar("r(t)")
+                  res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                }
+              }
+              else
+              {
+                varlist = tokens(st_global("e(varlist)"))
+                for(i=1; i<=rows; i++)
+                {
+                  stata("cap test " + invtokens(("[" + varlist[i] + "]") :+ strofreal(pos), " == ") + ", mtest(" + bd.opt.test.f_mtest + ")")
+                  res.ovr_statistic[i] = st_numscalar("r(F)")
+                  res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                }
+              }
+            }
+          }
+
+      /* Calculating Results (2) */
+
+        if(bd.opt.over.total == 1)
+        {
+          pos = rows(bd.oi.levels) + bd.opt.over.total
+
+          /* Mean */
+
+            cmd_mean = "cap xi, noomit: "
+
+            if(bd.opt.weight.survey)
+            {
+              if(bd.opt.weight.subpop != "") cmd_mean = cmd_mean + "svy, subpop(" + bd.opt.weight.subpop + "): "
+              else                           cmd_mean = cmd_mean + "svy: "
+            }
+
+            cmd_mean = cmd_mean + "mean " + vi.term + " if " + st_local("touse") + ", level(" + strofreal(bd.si.ci_level) + ") "
+
+            stata(cmd_mean)
+
+            res.mean[.,pos] = rowshape(st_matrix("r(table)")[1,.], rows)
+            res.se[.,pos]   = rowshape(st_matrix("r(table)")[2,.], rows)
+            res.t[.,pos]    = rowshape(st_matrix("r(table)")[3,.], rows)
+            res.lci[.,pos]  = rowshape(st_matrix("r(table)")[5,.], rows)
+            res.uci[.,pos]  = rowshape(st_matrix("r(table)")[6,.], rows)
+            res.df[.,pos]   = rowshape(st_matrix("r(table)")[7,.], rows)
+
+            if(bd.opt.weight.subpop == "") res.obs[.,pos] = rowshape(st_matrix("e(_N)"), rows)
+            else                           res.obs[.,pos] = rowshape(st_matrix("e(_N_subp)"), rows)
+
+          /* SD & Var */
+
+            stata("cap estat sd")
+
+            res.sd[.,pos]  = rowshape(st_matrix("r(sd)"), rows)
+            res.var[.,pos] = rowshape(st_matrix("r(variance)"), rows)
+        }
+
+      /* Logit CIs */
+
+        if(bd.si.ci_proportion)
+        {
+          res.lci = invlogit(logit(res.mean) :- invttail(max(res.df), ((100 - bd.si.ci_level) / 200)) :* (res.se :/ (res.mean :* (1 :- res.mean))))
+          res.uci = invlogit(logit(res.mean) :+ invttail(max(res.df), ((100 - bd.si.ci_level) / 200)) :* (res.se :/ (res.mean :* (1 :- res.mean))))
+        }
+
+      /* Sorting */
+
+        if(bd.opt.display.sort_statistic != "")
+        {
+          if(bd.opt.display.sort_statistic == "obs")  values = res.obs
+          if(bd.opt.display.sort_statistic == "nyes") values = res.nyes
+          if(bd.opt.display.sort_statistic == "mean") values = res.mean
+          if(bd.opt.display.sort_statistic == "se")   values = res.se
+          if(bd.opt.display.sort_statistic == "sd")   values = res.sd
+          if(bd.opt.display.sort_statistic == "var")  values = res.var
+          if(bd.opt.display.sort_statistic == "min")  values = res.min
+          if(bd.opt.display.sort_statistic == "max")  values = res.max
+
+          if((bd.opt.display.sort_statistic == "min" | bd.opt.display.sort_statistic == "max") & vi.binary == 0)
+          {
+            return(res)
+          }
+
+          values = range(1, rows, 1), values
+
+          if(bd.opt.display.sort_direction == "+") values = sort(values, 2)
+          else                                     values = sort(values, -2)
+
+          if(rows(selectindex(values[.,2] :== .)) > 0)
+          {
+            positions = values[selectindex(values[.,2] :!= .),1] \ values[selectindex(values[.,2] :== .),1]
+          }
+          else
+          {
+            positions = values[.,1]
+          }
+
+          bd.vi[vi_position].varlist = bd.vi[vi_position].varlist[positions]
+          bd.vi[vi_position].answers = bd.vi[vi_position].answers[positions]
+
+          res.obs  = res.obs[positions,.]
+          res.nyes = res.nyes[positions,.]
+          res.mean = res.mean[positions,.]
+          res.lci  = res.lci[positions,.]
+          res.uci  = res.uci[positions,.]
+          res.se   = res.se[positions,.]
+          res.sd   = res.sd[positions,.]
+          res.var  = res.var[positions,.]
+          res.min  = res.min[positions,.]
+          res.max  = res.max[positions,.]
+          res.t    = res.t[positions,.]
+          res.df   = res.df[positions,.]
+
+          if(rows(res.ovr_statistic) > 0) res.ovr_statistic = res.ovr_statistic[positions,.]
+          if(rows(res.ovr_pvalue)    > 0) res.ovr_pvalue    = res.ovr_pvalue[positions,.]
+          if(rows(res.ind_statistic) > 0) res.ind_statistic = res.ind_statistic[positions,.]
+          if(rows(res.ind_pvalue)    > 0) res.ind_pvalue    = res.ind_pvalue[positions,.]
+        }
+
+      return(res)
+    }
+
+  /* function : calculateSeries() */
+
+    struct results scalar calculateSeries(struct braddev scalar bd,
+                                          real           scalar vi_position)
+    {
+      struct varInfo scalar vi
+      struct results scalar res
+
+      vi = bd.vi[vi_position]
+
+      /* Defining Results */
+
+        rows = rows(vi.answers)
+
+        if(bd.oi.name == "") groups = 1
+        else                 groups = rows(bd.oi.levels) + bd.opt.over.total
+
+        res.obs = J(rows, groups, 0)
+        res.mean = res.lci = res.uci = res.se = res.sd = res.var = res.min = res.max = res.t = res.df = J(rows, groups, .)
+
+        if(vi.binary) res.nyes = res.obs
+        else          res.nyes = res.mean
+
+        if(bd.opt.test.overall)
+        {
+          res.ovr_statistic = res.ovr_pvalue = J(rows, 1, .)
+        }
+
+        if(bd.opt.test.individual)
+        {
+          res.ind_statistic = res.ind_pvalue = J(rows, rows(bd.oi.levels) * rows(bd.oi.levels), .)
         }
 
       /* Defining Commands */
 
         /* Mean */
 
-          cmd_mean = ""
-          if(input_bd.opt.survey)
-          {;
-            cmd_mean = "svy" + (input_bd.opt.subpop != "" ? ", subpop(" + input_bd.opt.subpop + ")" : "") + ":"
-          };
-          cmd_mean = "qui " + cmd_mean + "mean " + res.name_original + " if " + st_local("touse") + ", level(" + strofreal(input_bd.opt.ci_level) + ")"
+          cmd_mean = J(1, 4, "")
 
-        /* Count */
-
-          cmd_count = " if " + st_local("touse") + " & " + res.name_original + " & !missing(" + res.name_original + ")"
-          if(input_bd.opt.subpop != "")
+          cmd_mean[1] = "cap xi, noomit: "
+          if(bd.opt.weight.survey)
           {
-            cmd_count = cmd_count + " & " + input_bd.opt.subpop + " == 1"
+            if(bd.opt.weight.subpop != "") cmd_mean[1] = cmd_mean[1] + "svy, subpop(" + bd.opt.weight.subpop + "): "
+            else                           cmd_mean[1] = cmd_mean[1] + "svy: "
           }
+          cmd_mean[1] = cmd_mean[1] + "mean"
 
-      /* Values - No Over */
+          cmd_mean[3] = " if " + st_local("touse") + ", level(" + strofreal(bd.si.ci_level) + ") "
 
-        if(input_bd.oi.count == 0)
-        {;
-          /* Mean */
+          if(groups > 1) cmd_mean[4] = "over(" + bd.oi.name + ", nolabel)"
 
-            stata(cmd_mean)
-            res.vals_obs  = (input_bd.opt.subpop == "") ? st_matrix("e(_N)")' : st_matrix("e(_N_subp)")'
-            res.vals_mean = st_matrix("r(table)")[1,1]
-            res.vals_se   = st_matrix("r(table)")[2,1]
-            res.vals_t    = st_matrix("r(table)")[3,1]
-            res.vals_ci   = st_matrix("r(table)")[(5..6),1]'
-            res.vals_df   = st_matrix("r(table)")[7,1]
+        /* Count, Min, & Max */
 
-          /* SD */
+          cmd_count = J(1, 4, "")
 
-            stata("qui estat sd")
-            res.vals_sd  = st_matrix("r(sd)")
-            res.vals_var = st_matrix("r(variance)")
+          cmd_count[1] = "cap xi, noomit: tabstat"
+          cmd_count[3] = "if " + st_local("touse") + ", stat(sum min max) save"
+          if(groups > 1) cmd_count[4] = "by(" + bd.oi.name + ")"
 
-          /* Count */
+      /* Calculating Results */
 
-            stata("qui count " + cmd_count)
-            res.vals_nyes = st_numscalar("r(N)")
-
-          /* Min/Max */
-
-            stata("qui summarize " + res.name_original + " if " + st_local("touse"))
-            res.vals_minmax = J(1, 2, .)
-            res.vals_minmax[1,1] = st_numscalar("r(min)")
-            res.vals_minmax[1,2] = st_numscalar("r(max)")
-
-          /* Logit Transform */
-
-            if(input_bd.opt.ci_proportion == 1 & res.binary == 1)
-            {
-              res.vals_ci = logitTransform(res, input_bd.opt.ci_level)
-            }
-
-          return(res)
-        };
-
-      /* Values - Over (Individuals) */
-
-        group_count = (input_bd.oi.count == 0) ? 1 : (input_bd.oi.count + input_bd.opt.ovo_total)
-
-        if(input_bd.oi.count > 0)
+        for(i=1; i<=rows; i++)
         {
-          /* Initializing */
+          cmd_mean[2] = cmd_count[2] = vi.varlist[i]
 
-            res.vals_obs    = J(group_count, 1, .)
-            res.vals_mean   = J(group_count, 1, .)
-            res.vals_se     = J(group_count, 1, .)
-            res.vals_t      = J(group_count, 1, .)
-            res.vals_ci     = J(group_count, 2, .)
-            res.vals_df     = J(group_count, 1, .)
-            res.vals_sd     = J(group_count, 1, .)
-            res.vals_var    = J(group_count, 1, .)
-            res.vals_nyes   = J(group_count, 1, .)
-            res.vals_minmax = J(group_count, 2, .)
-            res.vals_povr   = J(group_count, 1, .)
-            res.vals_pind   = J(group_count, input_bd.oi.count, .)
+          /* Non-Total */
 
-          /* Mean */
+            /* Mean */
 
-            stata(cmd_mean + " over(" + st_local("group_var") + ", nolabel)")
-            res.over_labels = tokens(st_global("e(over_namelist)"))'
-            for(i=1; i<=rows(res.over_labels); i++)
-            {
-              over_pos = strtoreal(res.over_labels[i,1])
-              res.vals_obs[over_pos,1]  = (input_bd.opt.subpop == "") ? st_matrix("e(_N)")[1,i] : st_matrix("e(_N_subp)")[1,i]
-              res.vals_mean[over_pos,1] = st_matrix("r(table)")[1,i]
-              res.vals_se[over_pos,1]   = st_matrix("r(table)")[2,i]
-              res.vals_t[over_pos,1]    = st_matrix("r(table)")[3,i]
-              res.vals_ci[over_pos,1]   = st_matrix("r(table)")[5,i]
-              res.vals_ci[over_pos,2]   = st_matrix("r(table)")[6,i]
-              res.vals_df[over_pos,1]   = st_matrix("r(table)")[7,i]
-            }
+              stata(invtokens(cmd_mean))
+              stata("local _rc = _rc")
 
-          /* SD */
-
-            stata("qui estat sd")
-            for(i=1; i<=rows(res.over_labels); i++)
-            {
-              over_pos = strtoreal(res.over_labels[i,1])
-              res.vals_sd[over_pos,1]  = st_matrix("r(sd)")[1,i]
-              res.vals_var[over_pos,1] = st_matrix("r(variance)")[1,i]
-            }
-
-          /* Count & Min/Max */
-
-            for(i=1; i<=rows(res.over_labels); i++)
-            {
-              over_pos = strtoreal(res.over_labels[i,1])
-
-              /* Count */
-
-                stata("qui count " + cmd_count + " & " + st_local("group_var") + " == " + res.over_labels[i,1])
-                res.vals_nyes[over_pos,1] = st_numscalar("r(N)")
-
-              /* Min/Max */
-
-                stata("qui summarize " + res.name_original + " if " + st_local("touse") + " & " + st_local("group_var") + " == " + res.over_labels[i,1])
-                res.vals_minmax[over_pos,1] = st_numscalar("r(min)")
-                res.vals_minmax[over_pos,2] = st_numscalar("r(max)")
-            }
-
-          /* P-Values */
-
-            test_labels = (("[" + res.name_original + "]") :+ res.over_labels)'
-
-            /* Overall */
-
-              stata("qui test " + invtokens(test_labels, " == ") + ", mtest(" + input_bd.opt.pval_mtest + ")")
-
-              for(i=1; i<=rows(res.over_labels); i++)
+              if(st_local("_rc") != "0")
               {
-                over_pos = strtoreal(res.over_labels[i,1])
-                res.vals_povr[over_pos,1] = st_numscalar("r(p)")
+                continue
               }
 
-            /* Individual */
+              pos = 1
+              if(groups > 1) pos = strtoreal(tokens(st_global("e(over_namelist)")))
 
-              for(i=1; i<=cols(test_labels); i++)
+              res.mean[i,pos] = st_matrix("r(table)")[1,.]
+              res.se[i,pos]   = st_matrix("r(table)")[2,.]
+              res.t[i,pos]    = st_matrix("r(table)")[3,.]
+              res.lci[i,pos]  = st_matrix("r(table)")[5,.]
+              res.uci[i,pos]  = st_matrix("r(table)")[6,.]
+              res.df[i,pos]   = st_matrix("r(table)")[7,.]
+
+              if(bd.opt.weight.subpop == "") res.obs[i,pos] = st_matrix("e(_N)")
+              else                           res.obs[i,pos] = st_matrix("e(_N_subp)")
+
+            /* SD & Var */
+
+              stata("cap estat sd")
+
+              res.sd[i,pos]  = st_matrix("r(sd)")
+              res.var[i,pos] = st_matrix("r(variance)")
+
+            /* Count, Min, & Max */
+
+              stata(invtokens(cmd_count))
+
+              if(groups == 1)
               {
-                stata("qui test " + test_labels[1,i] + " == " + invtokens(test_labels, " == ") + ", mtest(" + input_bd.opt.pval_mtest + ")")
+                if(vi.binary) res.nyes[i,1] = st_matrix("r(StatTotal)")'[.,1]
 
-                over_col = strtoreal(res.over_labels[i,1])
-                for(j=1; j<=rows(res.over_labels); j++)
+                res.min[i,1] = st_matrix("r(StatTotal)")'[.,2]
+                res.max[i,1] = st_matrix("r(StatTotal)")'[.,3]
+              }
+              else
+              {
+                for(j=1; j<=rows(bd.oi.levels); j++)
                 {
-                  over_row = strtoreal(res.over_labels[j,1])
-                  res.vals_pind[over_row,over_col] = (input_bd.opt.pval_mtest == "noadjust") ? st_matrix("r(mtest)")[j,3] : st_matrix("r(mtest)")[j,4]
+                  if(vi.binary) res.nyes[i,j] = st_matrix("r(Stat" + strofreal(j) + ")")'[.,1]
+
+                  res.min[i,j] = st_matrix("r(Stat" + strofreal(j) + ")")'[.,2]
+                  res.max[i,j] = st_matrix("r(Stat" + strofreal(j) + ")")'[.,3]
+                }
+
+                if(bd.opt.over.total)
+                {
+                  if(vi.binary) res.nyes[i,groups] = st_matrix("r(StatTotal)")'[.,1]
+
+                  res.min[i,groups] = st_matrix("r(StatTotal)")'[.,2]
+                  res.max[i,groups] = st_matrix("r(StatTotal)")'[.,3]
                 }
               }
+
+            /* Testing - Overall */
+
+              if(bd.opt.test.overall)
+              {
+                if(bd.opt.test.t_overall)
+                {
+                  stata("cap ttesti " + strofreal(res.obs[i,1]) + " " + strofreal(res.mean[i,1]) + " " + strofreal(res.sd[i,1]) + " " + strofreal(res.obs[i,2]) + " " + strofreal(res.mean[i,2]) + " " + strofreal(res.sd[i,2]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                  res.ovr_statistic[i] = st_numscalar("r(t)")
+                  res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                }
+                else
+                {
+                  varlist = st_global("e(varlist)")
+                  stata("cap test " + invtokens(("[" + varlist + "]") :+ strofreal(pos), " == ") + ", mtest(" + bd.opt.test.f_mtest + ")")
+                  res.ovr_statistic[i] = st_numscalar("r(F)")
+                  res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                }
+              }
+
+            /* Testing - Individual */
+
+              levels = rows(bd.oi.levels)
+
+              if(bd.opt.test.individual)
+              {
+                if(bd.opt.test.t_individual)
+                {
+                  for(j=1; j<=cols(pos); j++)
+                  {
+                    for(k=j+1; k<=cols(pos); k++)
+                    {
+                      stata("cap ttesti " + strofreal(res.obs[i,pos[j]]) + " " + strofreal(res.mean[i,pos[j]]) + " " + strofreal(res.sd[i,pos[j]]) + " " + strofreal(res.obs[i,pos[k]]) + " " + strofreal(res.mean[i,pos[k]]) + " " + strofreal(res.sd[i,pos[k]]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                      res.ind_statistic[i,((pos[j] - 1) * levels) + pos[k]] = res.ind_statistic[i,((pos[k] - 1) * levels) + pos[j]] = st_numscalar("r(t)")
+                      res.ind_pvalue[i,((pos[j] - 1) * levels) + pos[k]]    = res.ind_pvalue[i,((pos[k] - 1) * levels) + pos[j]]    = st_numscalar("r(p)")
+                    }
+                  }
+                }
+                else
+                {
+                  varlist = st_global("e(varlist)")
+                  for(j=1; j<=cols(pos); j++)
+                  {
+                    stata("cap test " + "[" + varlist + "]" + strofreal(pos[j]) + " == " + invtokens(("[" + varlist + "]") :+ strofreal(pos), " == ") + ", mtest(" + bd.opt.test.f_mtest + ")")
+                    res.ind_statistic[i,((pos[j] - 1) * levels) :+ pos] = st_matrix("r(mtest)")[.,1]'
+                    res.ind_pvalue[i,((pos[j] - 1) * levels) :+ pos]    = st_matrix("r(mtest)")[.,3]'
+                  }
+                }
+              }
+
+          /* Total */
+
+            if(bd.opt.over.total)
+            {
+
+            /* Mean */
+
+              stata(invtokens(cmd_mean[1..3]))
+
+              pos = groups
+
+              res.mean[i,pos] = st_matrix("r(table)")[1,.]
+              res.se[i,pos]   = st_matrix("r(table)")[2,.]
+              res.t[i,pos]    = st_matrix("r(table)")[3,.]
+              res.lci[i,pos]  = st_matrix("r(table)")[5,.]
+              res.uci[i,pos]  = st_matrix("r(table)")[6,.]
+              res.df[i,pos]   = st_matrix("r(table)")[7,.]
+
+              if(bd.opt.weight.subpop == "") res.obs[i,pos] = st_matrix("e(_N)")
+              else                           res.obs[i,pos] = st_matrix("e(_N_subp)")
+
+            /* SD & Var */
+
+              stata("cap estat sd")
+
+              res.sd[i,pos]  = st_matrix("r(sd)")
+              res.var[i,pos] = st_matrix("r(variance)")
+
+            }
+
+          /* Logit CIs */
+
+            if(bd.si.ci_proportion)
+            {
+              res.lci[i,.] = invlogit(logit(res.mean[i,.]) :- invttail(max(res.df[i,.]), ((100 - bd.si.ci_level) / 200)) :* (res.se[i,.] :/ (res.mean[i,.] :* (1 :- res.mean[i,.]))))
+              res.uci[i,.] = invlogit(logit(res.mean[i,.]) :+ invttail(max(res.df[i,.]), ((100 - bd.si.ci_level) / 200)) :* (res.se[i,.] :/ (res.mean[i,.] :* (1 :- res.mean[i,.]))))
+            }
         }
 
-      /* Values - Over (Total) */
+      /* Sorting */
 
-        if(input_bd.oi.count > 0 & input_bd.opt.ovo_total == 1)
+        if(bd.opt.display.sort_statistic != "")
         {
-          /* Mean */
+          if(bd.opt.display.sort_statistic == "obs")  values = res.obs
+          if(bd.opt.display.sort_statistic == "nyes") values = res.nyes
+          if(bd.opt.display.sort_statistic == "mean") values = res.mean
+          if(bd.opt.display.sort_statistic == "se")   values = res.se
+          if(bd.opt.display.sort_statistic == "sd")   values = res.sd
+          if(bd.opt.display.sort_statistic == "var")  values = res.var
+          if(bd.opt.display.sort_statistic == "min")  values = res.min
+          if(bd.opt.display.sort_statistic == "max")  values = res.max
 
-            stata(cmd_mean)
-            res.vals_obs[group_count,1]  = (input_bd.opt.subpop == "") ? st_matrix("e(_N)")[1,1] : st_matrix("e(_N_subp)")[1,1]
-            res.vals_mean[group_count,1] = st_matrix("r(table)")[1,1]
-            res.vals_se[group_count,1]   = st_matrix("r(table)")[2,1]
-            res.vals_t[group_count,1]    = st_matrix("r(table)")[3,1]
-            res.vals_ci[group_count,1]   = st_matrix("r(table)")[5,1]
-            res.vals_ci[group_count,2]   = st_matrix("r(table)")[6,1]
-            res.vals_df[group_count,1]   = st_matrix("r(table)")[7,1]
-
-          /* SD */
-
-            stata("qui estat sd")
-            res.vals_sd[group_count,1]  = st_matrix("r(sd)")[1,1]
-            res.vals_var[group_count,1] = st_matrix("r(variance)")[1,1]
-
-          /* Count */
-
-            stata("qui count " + cmd_count)
-            res.vals_nyes[group_count,1] = st_numscalar("r(N)")
-
-          /* Min/Max */
-
-            stata("qui summarize " + res.name_original + " if " + st_local("touse"))
-            res.vals_minmax[group_count,1] = st_numscalar("r(min)")
-            res.vals_minmax[group_count,2] = st_numscalar("r(max)")
-        }
-
-      /* Stars & Scripts */
-
-        if(cols(input_bd.opt.pval_stars) > 0)
-        {
-          res.ps_stars = J(group_count, 1, "")
-          for(i=1; i<=cols(input_bd.opt.pval_stars); i++)
+          if((bd.opt.display.sort_statistic == "min" | bd.opt.display.sort_statistic == "max") & vi.binary == 0)
           {
-            res.ps_stars = res.ps_stars :+ ((res.vals_povr :< input_bd.opt.pval_stars[1,i]) :* uchar(735))
+            return(res)
           }
-        }
 
-        if(input_bd.opt.pval_scripts != .)
-        {
-          code_list = input_bd.code_list[1,(1..input_bd.oi.count)]
-          pind = (res.vals_pind :< input_bd.opt.pval_scripts) :* code_list
+          values = range(1, rows, 1), values
 
-          res.ps_scripts = J(group_count, 1, "")
-          for(i=1; i<=cols(pind); i++)
+          if(bd.opt.display.sort_direction == "+") values = sort(values, 2)
+          else                                     values = sort(values, -2)
+
+          if(rows(selectindex(values[.,2] :== .)) > 0)
           {
-            res.ps_scripts = res.ps_scripts :+ pind[.,i]
+            positions = values[selectindex(values[.,2] :!= .),1] \ values[selectindex(values[.,2] :== .),1]
           }
-        }
+          else
+          {
+            positions = values[.,1]
+          }
 
-      /* Logit Transform */
+          bd.vi[vi_position].varlist = bd.vi[vi_position].varlist[positions]
+          bd.vi[vi_position].answers = bd.vi[vi_position].answers[positions]
 
-        if(input_bd.opt.ci_proportion == 1 & res.binary == 1)
-        {
-          res.vals_ci = logitTransform(res, input_bd.opt.ci_level)
+          res.obs  = res.obs[positions,.]
+          res.nyes = res.nyes[positions,.]
+          res.mean = res.mean[positions,.]
+          res.lci  = res.lci[positions,.]
+          res.uci  = res.uci[positions,.]
+          res.se   = res.se[positions,.]
+          res.sd   = res.sd[positions,.]
+          res.var  = res.var[positions,.]
+          res.min  = res.min[positions,.]
+          res.max  = res.max[positions,.]
+          res.t    = res.t[positions,.]
+          res.df   = res.df[positions,.]
+
+          if(rows(res.ovr_statistic) > 0) res.ovr_statistic = res.ovr_statistic[positions,.]
+          if(rows(res.ovr_pvalue)    > 0) res.ovr_pvalue    = res.ovr_pvalue[positions,.]
+          if(rows(res.ind_statistic) > 0) res.ind_statistic = res.ind_statistic[positions,.]
+          if(rows(res.ind_pvalue)    > 0) res.ind_pvalue    = res.ind_pvalue[positions,.]
         }
 
       return(res)
     }
 
-  /* logitTransform() */
+/*======================================================================*/
+/*   Mata Structure - printer                                           */
+/*======================================================================*/
 
-    real matrix logitTransform(struct results scalar input_res,
-                               real           scalar ci_level)
+  /* function : printer() */
+
+    void printer(struct braddev scalar bd)
     {
-      df       = input_res.vals_df
-      tterm    = (100 - ci_level) / 200
-      logit_b  = logit(input_res.vals_mean)
-      logit_se = input_res.vals_se :/ (input_res.vals_mean :* (1 :- input_res.vals_mean))
-
-      lci = invlogit(logit_b :- invttail(df, tterm) :* logit_se)
-      uci = invlogit(logit_b :+ invttail(df, tterm) :* logit_se)
-
-      return((lci, uci))
-    }
-
-  end
-
-**======================================================================**
-**   Mata Structure - printer                                           **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* printer() */
-
-    void printer(struct braddev scalar input_bd)
-    {
-      if(input_bd.opt.dis_print == 0) return(J(0,0,.))
+      if(bd.opt.display.print == 0) return(J(0, 0, .))
 
       /* Title */
 
-        if(input_bd.opt.dis_title != "")
-        {
-          printf("\n{title:" + usubinstr(getTitle(input_bd), "%", "%%", .) + "}\n")
-        }
+        title = getTitle(bd.vi)
+
+        if(title != "") printf("\n{title:" + title + "}\n")
 
       /* Legend */
 
-        printLegend(input_bd)
+        if(rows(bd.oi.levels) > 0 & bd.opt.over.legend)
+        {
+          labels = st_vlmap(bd.oi.name, bd.oi.levels)
+          labels = strtrim(substr(labels, strpos(labels, " ") :+ 1))
+
+          legend = "_over_" :+ strofreal(bd.oi.levels)
+          legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} {c |} " :+ invtokens(bd.oi.varlist, ", ") :+ " = " :+ char(34) :+ labels :+ char(34)
+
+          printf("\n")
+          display(legend)
+        }
 
       /* Table */
 
         printf("\n")
 
-        if(input_bd.oi.count == 0)
-        {
-          printTableLongNoOver(input_bd)
-        }
-
-        if(input_bd.oi.count > 0 & input_bd.opt.dis_wide == 0)
-        {
-          printTableLongOver(input_bd)
-        }
-
-        if(input_bd.oi.count > 0 & input_bd.opt.dis_wide == 1)
-        {
-          printTableWide(input_bd)
-        }
+        if(bd.opt.display.wide) printTableWide(bd)
+        else                    printTableLong(bd)
 
       /* Footer */
 
-        if(input_bd.opt.dis_footer)
+        if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars) & bd.opt.test.footer)
         {
-          printFooter(input_bd)
+          legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
+          legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} p(overall) < 0" :+ strofreal(bd.opt.test.stars)'
+          display(legend)
+        }
+
+        if(bd.opt.test.individual & bd.opt.test.scripts != . & any(bd.si.scripts) & bd.opt.test.footer)
+        {
+          legend = uchar(bd.opt.test.letters[1..rows(bd.oi.levels)])' :+ " sig. diff. from " :+ char(34) :+ bd.oi.labels :+ char(34) :+ " (p < 0" :+ strofreal(bd.opt.test.scripts) :+ ")"
+          display(legend)
         }
 
       printf("\n")
     }
 
-  /* printLegend() */
+  /* function : getTitle() */
 
-    void printLegend(struct braddev scalar input_bd)
+    string scalar getTitle(struct varInfo matrix vi)
     {
-      if(input_bd.oi.count == 0 | input_bd.opt.ovo_legend == 0) return(J(0,0,.))
+      title = st_local("title")
 
-      printf("\n")
+      if(title == "none") return("")
 
-      legend = "{lalign " :+ strofreal(max(udstrlen(input_bd.oi.name_short))) :+ ":" :+ input_bd.oi.name_short :+ "}"
-      legend = legend :+ " {c |} " :+ invtokens(input_bd.oi.list, ", ") :+ `" = ""' :+ input_bd.oi.name_long :+ `"""'
-
-      display(legend)
-    }
-
-  /* printTableLongNoOver() */
-
-    void printTableLongNoOver(struct braddev scalar input_bd)
-    {
-      /* Alignment */
-
-        al = input_bd.opt.dis_align
-
-      /* Name Width */
-
-        name_width = max((14, udstrlen(input_bd.vi.display_name), udstrlen(input_bd.vi.display_series)))
-        name_width = min((32, name_width))
-
-      /* Linesize */
-
-        linesize = c("linesize")
-        linesize = max((140, linesize))
-        linesize = min((240, linesize))
-
-        linesize = linesize - 1
-
-      /* Table Columns */
-
-        table_cols = tableColumns(name_width + 2, linesize, (input_bd.st.col_length :+ 2))
-
-      /* Header */
-
-        table = J(2, 1 + input_bd.st.count, "")
-
-        table[1,.] = ("{space " + strofreal(name_width + 2) + "}{c |}"), (" {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ input_bd.st.name_abbrev :+ "} ")
-        table[2,.] = ("{hline " + strofreal(name_width + 2) + "}{c +}"), ("{hline " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}")
-
-        separator = table[2,.]
-
-      /* Variables & Statistics */
-
-        for(i=1; i<=input_bd.vi.var_count; i++)
+      if(title == "")
+      {
+        if(rows(vi) == 1)
         {
-          if(i > 1)
-          {
-            if(input_bd.vi.series_position[1,i] == 1)
-            {
-              table = table \ separator
-            }
-
-            if(input_bd.vi.series_position[1,i] == . & input_bd.vi.series_position[1,(i-1)] != .)
-            {
-              table = table \ separator
-            }
-          }
-
-          table = table \ printResultsLongNoOver(input_bd, input_bd.res[1,i], name_width)
-        }
-
-      /* Printing */
-
-        for(i=1; i<=rows(table_cols); i++)
-        {
-          if(rows(table_cols) > 1)
-          {
-            printf("\n(" + strofreal(i) + "/" + strofreal(rows(table_cols)) + ")\n")
-          }
-
-          print_table = table[.,1]
-          for(j=table_cols[i,1]; j<=table_cols[i,2]; j++)
-          {
-            print_table = print_table :+ table[.,j]
-          }
-          display(print_table)
-        }
-    }
-
-  /* printResultsLongNoOver() */
-
-    string matrix printResultsLongNoOver(struct braddev scalar input_bd,
-                                         struct results scalar input_res,
-                                         real           scalar name_width)
-    {
-      /* Alignment */
-
-        al = input_bd.opt.dis_align
-
-      /* Initializing Table */
-
-        table = J(1, 1 + input_bd.st.count, "")
-
-      /* Name */
-
-        if(input_res.series_position == .)
-        {
-          table[1,1] = "{res} {lalign " + strofreal(name_width) + ":" + abbrev(input_res.display_name, name_width) + "} {res}{c |}"
+          title = vi.term + " - " + vi.question
         }
         else
         {
-          table[1,1] = "{txt} {ralign " + strofreal(name_width) + ":" + abbrev(input_res.display_name, name_width) + "} {res}{c |}"
+          title = J(1, rows(vi), "")
+          for(i=1; i<=rows(vi); i++)
+          {
+            title[i] = vi[i].term
+          }
+          title = invtokens(title, ", ")
         }
+      }
 
-      /* Stats */
+      title = subinstr(subinstr(title, "%", "%%"), "\", "\\")
 
-        for(i=1; i<=input_bd.st.count; i++)
-        {
-          /* Getting Stat */
-
-            if(input_bd.st.name_short[1,i] == "obs")  values = input_res.vals_obs
-            if(input_bd.st.name_short[1,i] == "nyes") values = input_res.vals_nyes
-            if(input_bd.st.name_short[1,i] == "mean") values = input_res.vals_mean
-            if(input_bd.st.name_short[1,i] == "se")   values = input_res.vals_se
-            if(input_bd.st.name_short[1,i] == "lci")  values = input_res.vals_ci[.,1]
-            if(input_bd.st.name_short[1,i] == "uci")  values = input_res.vals_ci[.,2]
-            if(input_bd.st.name_short[1,i] == "ci")   values = input_res.vals_ci
-            if(input_bd.st.name_short[1,i] == "sd")   values = input_res.vals_sd
-            if(input_bd.st.name_short[1,i] == "var")  values = input_res.vals_var
-            if(input_bd.st.name_short[1,i] == "min")  values = input_res.vals_minmax[.,1]
-            if(input_bd.st.name_short[1,i] == "max")  values = input_res.vals_minmax[.,2]
-
-          /* Percent (1) */
-
-            if(input_bd.opt.dis_percent & input_res.binary & !inlist(input_bd.st.name_short[1,i], ("obs", "nyes")))
-            {
-              values = values :* 100
-            }
-
-          /* Format */
-
-            values = strofreal(values, input_bd.st.col_format[1,i])
-
-          /* Percent (2) */
-
-            if(input_bd.opt.dis_percent & input_res.binary * !inlist(input_bd.st.name_short[1,i], ("obs", "nyes")))
-            {
-              values = values :+ ((values :!= ".") :* "%")
-            }
-
-          /* Specific Additions */
-
-            if(input_bd.st.name_short[1,i] == "ci")
-            {
-              values = (values[.,1] :!= ".") :* (substr(input_bd.opt.ci_notation,1,1) :+ values[.,1] :+ input_bd.opt.ci_separator :+ values[.,2] :+ substr(input_bd.opt.ci_notation,2,1))
-              values = values :+ ((values :== "") :* ".")
-            }
-
-          /* Setting Field Size */
-
-            values = " {" :+ al :+ " " :+ strofreal(input_bd.st.col_length[1,i]) :+ ":" :+ values :+ "} "
-
-          /* Adding to Table */
-
-            table[1,(i+1)] = values
-        }
-
-      /* Series */
-
-        if(input_res.series_position == 1)
-        {
-          line = ("{res} {lalign " + strofreal(name_width) + ":" + abbrev(input_res.display_series, name_width) + "} {res}{c |}"), ("{space " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}")
-          table = line \ table
-        }
-
-      return(table)
+      return(title)
     }
 
-  /* printTableLongOver() */
+  /* function : seriesTable() */
 
-    void printTableLongOver(struct braddev scalar input_bd)
+    string matrix seriesTable(struct varInfo scalar vi,
+                              struct braddev scalar bd)
     {
-      /* Alignment */
+      /* Getting Stats */
 
-        al = input_bd.opt.dis_align
+        groups = rows(bd.oi.levels) == 0 ? 1 : rows(bd.oi.levels) + bd.opt.over.total
 
-      /* Name Width */
+        stats_table = J(rows(vi.answers), groups * rows(bd.si.name), "")
 
-        name_width = max((14, udstrlen(input_bd.oi.name_select')))
-
-        if(input_bd.vi.series_count == 1)
+        for(i=1; i<=rows(bd.si.name); i++)
         {
-          name_width = max((name_width, udstrlen(input_bd.vi.display_name)))
-        }
+          positions = range(1, groups, 1)
+          positions = i :+ ((positions :- 1) :* rows(bd.si.name))
 
-        name_width = min((32, name_width))
-
-      /* Linesize */
-
-        linesize = c("linesize")
-        linesize = max((140, linesize))
-        linesize = min((240, linesize))
-
-        linesize = linesize - 1 - (input_bd.opt.pval_show > 0)
-
-      /* Table Columns */
-
-        p_count = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * input_bd.oi.count)
-
-        table_cols = tableColumns(name_width + 2, linesize, ((input_bd.st.col_length :+ 2), J(1, p_count, 8)))
-
-      /* Header */
-
-        table = J(2 + (p_count > 0), 1 + input_bd.st.count + p_count, "")
-
-        /* Groupings */
-
-          line = ("{space " + strofreal(name_width + 2) + "}{c |}")
-          line = line, ("{space " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}")
-
-          p_col = 2 + input_bd.st.count
-
-          for(i=1; i<=rows(table_cols); i++)
+          if(bd.si.name[i] != "ci")
           {
-            for(j=table_cols[i,1]; j<=table_cols[i,2]; j++)
-            {
-              if(j < p_col) continue
+            if(bd.si.name[i] == "obs")  values1 = vi.results.obs
+            if(bd.si.name[i] == "nyes") values1 = vi.results.nyes
+            if(bd.si.name[i] == "mean") values1 = vi.results.mean
+            if(bd.si.name[i] == "se")   values1 = vi.results.se
+            if(bd.si.name[i] == "sd")   values1 = vi.results.sd
+            if(bd.si.name[i] == "var")  values1 = vi.results.var
+            if(bd.si.name[i] == "lci")  values1 = vi.results.lci
+            if(bd.si.name[i] == "uci")  values1 = vi.results.uci
+            if(bd.si.name[i] == "min")  values1 = vi.results.min
+            if(bd.si.name[i] == "max")  values1 = vi.results.max
 
-              if(j == p_col | (table_cols[i,1] > p_col & j == table_cols[i,1]))
-              {
-                length = ((table_cols[i,2] - j + 1) * 8) - 2
-                line = line, (" {" + al + " " + strofreal(length) + ":" + abbrev("P-Values", length) + "} ")
-                continue
-              }
+            if(vi.binary & bd.si.percent[i]) values1 = values1 :* 100
 
-              line = line, ""
-            }
+            format = "%32." + (vi.binary ? strofreal(bd.si.roundi[i]) : strofreal(bd.si.roundc[i])) + "f" + (bd.si.comma[i] * "c")
+
+            strings = strofreal(values1, format) :+ (vi.binary * bd.si.percent[i] * bd.si.symbol[i] * "%")
+            strings = bd.si.notation[i,1] :+ strings :+ bd.si.notation[i,2]
+            strings = ((values1 :!= .) :* strings)
+
+            stats_table[.,positions] = strings
+
+            continue
           }
 
-          if(p_count > 0) table[1,.] = line
-
-        /* Stat */
-
-          line = ("{space " + strofreal(name_width + 2) + "}{c |}")
-          line = line, (" {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ input_bd.st.name_abbrev :+ "} ")
-
-          if(input_bd.opt.pval_show > 0) line = line, (" {" :+ al :+ " 6:" :+ abbrev("Overall", 6) :+ "} ")
-          if(input_bd.opt.pval_show == 2) line = line, (" {" :+ al :+ " 6:" :+ abbrev(("vs " :+ strofreal(range(1, input_bd.oi.count, 1)')), 6) :+ "} ")
-
-          if(p_count > 0) table[2,.] = line
-          else            table[1,.] = line
-
-        /* Separator */
-
-          separator = ("{hline " + strofreal(name_width + 2) + "}{c +}")
-          separator = separator, ("{hline " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}")
-          separator = separator, J(1, p_count, "{hline 8}")
-
-          if(p_count > 0) table[3,.] = separator
-          else            table[2,.] = separator
-
-      /* Variables & Statistics */
-
-        for(i=1; i<=input_bd.vi.var_count; i++)
-        {
-          table = table \ printResultsLongOver(input_bd, input_bd.res[1,i], name_width)
-
-          if(i == cols(input_bd.res)) table = table \ subinstr(separator, "+", "BT")
-          else                        table = table \ separator
-        }
-
-      /* Printing */
-
-        v_separator = table[.,1]
-        v_separator = substr(v_separator, strrpos(v_separator, "{"))
-
-        p_col = 2 + input_bd.st.count
-
-        for(i=1; i<=rows(table_cols); i++)
-        {
-          if(rows(table_cols) > 1)
+          if(bd.si.name[i] == "ci")
           {
-            printf("\n(" + strofreal(i) + "/" + strofreal(rows(table_cols)) + ")\n")
-          }
+            format = "%32." + (vi.binary ? strofreal(bd.si.roundi[i]) : strofreal(bd.si.roundc[i])) + "f"
 
-          print_table = table[.,1]
-          for(j=table_cols[i,1]; j<=table_cols[i,2]; j++)
-          {
-            if(j == p_col) print_table = print_table :+ v_separator
-            print_table = print_table :+ table[.,j]
-          }
+            values1 = vi.results.lci
+            values2 = vi.results.uci
 
-          display(print_table)
-        }
-
-    }
-
-  /* printResultsLongOver() */
-
-    string matrix printResultsLongOver(struct braddev scalar input_bd,
-                                       struct results scalar input_res,
-                                       real           scalar name_width)
-    {
-      /* Alignment */
-
-        al = input_bd.opt.dis_align
-
-      /* Initializing Table */
-
-        group_count = input_bd.oi.count + input_bd.opt.ovo_total
-        p_count     = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * input_bd.oi.count)
-
-        table = J(group_count, 1 + input_bd.st.count + p_count, "")
-
-      /* Over Names */
-
-        over_names = input_bd.oi.name_select
-        if(input_bd.opt.ovo_total) over_names = over_names \ "Total"
-
-        table[.,1] = "{txt} {ralign " :+ strofreal(name_width) :+ ":" :+ abbrev(over_names, name_width) :+ "} {res}{c |}"
-
-      /* Stats */
-
-        for(i=1; i<=input_bd.st.count; i++)
-        {
-          /* Getting Stat */
-
-            if(input_bd.st.name_short[1,i] == "obs")  values = input_res.vals_obs
-            if(input_bd.st.name_short[1,i] == "nyes") values = input_res.vals_nyes
-            if(input_bd.st.name_short[1,i] == "mean") values = input_res.vals_mean
-            if(input_bd.st.name_short[1,i] == "se")   values = input_res.vals_se
-            if(input_bd.st.name_short[1,i] == "lci")  values = input_res.vals_ci[.,1]
-            if(input_bd.st.name_short[1,i] == "uci")  values = input_res.vals_ci[.,2]
-            if(input_bd.st.name_short[1,i] == "ci")   values = input_res.vals_ci
-            if(input_bd.st.name_short[1,i] == "sd")   values = input_res.vals_sd
-            if(input_bd.st.name_short[1,i] == "var")  values = input_res.vals_var
-            if(input_bd.st.name_short[1,i] == "min")  values = input_res.vals_minmax[.,1]
-            if(input_bd.st.name_short[1,i] == "max")  values = input_res.vals_minmax[.,2]
-
-          /* Percent (1) */
-
-            if(input_bd.opt.dis_percent & input_res.binary & !inlist(input_bd.st.name_short[1,i], ("obs", "nyes")))
+            if(vi.binary & bd.si.percent[i])
             {
-              values = values :* 100
+              values1 = values1 :* 100
+              values2 = values2 :* 100
             }
 
-          /* Format */
+            strings = vi.binary * bd.si.percent[i] * bd.si.symbol[i] * "%"
+            strings = (strofreal(values1, format) :+ strings) :+ bd.si.ci_separator :+ " " :+ (strofreal(values2, format) :+ strings)
+            strings = bd.si.notation[i,1] :+ strings :+ bd.si.notation[i,2]
+            strings = ((values1 :!= .) :* strings)
 
-            values = strofreal(values, input_bd.st.col_format[1,i])
+            stats_table[.,positions] = strings
 
-          /* Percent (2) */
-
-            if(input_bd.opt.dis_percent & input_res.binary * !inlist(input_bd.st.name_short[1,i], ("obs", "nyes")))
-            {
-              values = values :+ ((values :!= ".") :* "%")
-            }
-
-          /* Specific Additions */
-
-            if(input_bd.st.name_short[1,i] == "ci")
-            {
-              values = (values[.,1] :!= ".") :* (substr(input_bd.opt.ci_notation,1,1) :+ values[.,1] :+ input_bd.opt.ci_separator :+ values[.,2] :+ substr(input_bd.opt.ci_notation,2,1))
-              values = values :+ ((values :== "") :* ".")
-            }
-
-            if(input_bd.st.name_short[1,i] == "mean" & cols(input_res.ps_stars) > 0)
-            {
-              values = values :+ input_res.ps_stars
-            }
-
-            if(input_bd.st.name_short[1,i] == "ci" & cols(input_res.ps_scripts) > 0)
-            {
-              values = values :+ input_res.ps_scripts
-            }
-
-          /* Setting Field Size */
-
-            values = " {" :+ al :+ " " :+ strofreal(input_bd.st.col_length[1,i]) :+ ":" :+ values :+ "} "
-
-          /* Adding to Table */
-
-            table[.,(i+1)] = values
-        }
-
-      /* P-Values */
-
-        col = 2 + input_bd.st.count
-
-        if(input_bd.opt.pval_show > 0)
-        {
-          table[.,col] = " {" :+ al :+ " 6:" :+ strofreal(input_res.vals_povr, "%6.4f") :+ "} "
-          col = col + 1
-        }
-
-        if(input_bd.opt.pval_show == 2)
-        {
-          for(i=1; i<=input_bd.oi.count; i++)
-          {
-            table[.,col] = " {" :+ al :+ " 6:" :+ strofreal(input_res.vals_pind[.,i], "%6.4f") :+ "} "
-            col = col + 1
+            continue
           }
         }
 
-      /* Variable Name */
+        nonmissing = (stats_table :!= "")
 
-        if(input_bd.vi.series_count == 1)
+      /* P-Values - Stars */
+
+        if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars))
         {
-          line = "{res} {lalign " + strofreal(name_width) + ":" + abbrev(input_res.display_name, name_width) + "} {res}{c |}"
-        }
-        else
-        {
-          line = "{res} {lalign " + strofreal(name_width) + ":" + abbrev(input_res.name_original, name_width) + "} {res}{c |}"
-        }
+          postscripts = J(rows(vi.answers), 1, "")
 
-        line = line, ("{space " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}")
-
-        if(input_bd.opt.pval_show > 0) line = line, J(1, p_count, "{space 8}")
-
-        table = line \ table
-
-      return(table)
-    }
-
-  /* printTableWide() */
-
-    void printTableWide(struct braddev scalar input_bd)
-    {
-      /* Alignment */
-
-        al = input_bd.opt.dis_align
-
-      /* Name Width */
-
-        name_width = max((14, udstrlen(input_bd.vi.display_name), udstrlen(input_bd.vi.display_series)))
-        name_width = min((32, name_width))
-
-      /* Linesize */
-
-        group_count = input_bd.oi.count + input_bd.opt.ovo_total
-        p_count     = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * (factorial(input_bd.oi.count)/(factorial(2) * factorial(input_bd.oi.count-2))))
-
-        linesize = c("linesize")
-        linesize = max((140, linesize))
-        linesize = min((240, linesize))
-
-        linesize = linesize - 1 - group_count - (input_bd.opt.pval_show > 0)
-
-      /* Table Columns */
-
-        table_cols = J(1, group_count, input_bd.st.col_length), J(1, p_count, 6)
-        table_cols = tableColumns(name_width + 2, linesize, (table_cols :+ 2))
-
-      /* Header */
-
-        /* Over - Separate */
-
-          if(input_bd.opt.ovo_sep == 1 & cols(input_bd.oi.list) > 1 & input_bd.opt.ovo_labels == 1)
+          for(i=1; i<=cols(bd.opt.test.stars); i++)
           {
-            table = J(cols(input_bd.oi.list), 1 + (group_count * input_bd.st.count) + p_count, "")
-            breaks = J(cols(input_bd.oi.list), 1 + (group_count * input_bd.st.count) + p_count, .)
-
-            for(i=1; i<=cols(input_bd.oi.list); i++)
-            {
-              line = "{space " + strofreal(name_width + 2) + "}"
-              break_line = .
-
-              stata("qui levelsof " + input_bd.oi.list[1,i] + " if !missing(" + st_local("group_var") + "), local(over_lvls)")
-              over_lvls = strtoreal(tokens(st_local("over_lvls")))
-
-              /* Over Variable */
-
-                for(j=1; j<=cols(over_lvls); j++)
-                {
-                  stata("qui levelsof " + st_local("group_var") + " if " + input_bd.oi.list[1,i] + " == " + strofreal(over_lvls[1,j]) + ", local(curr_lvls)")
-                  curr_lvls = strtoreal(tokens(st_local("curr_lvls")))
-
-                  vec_index = vectorIndex(curr_lvls)
-                  vec_index = vec_index, J(rows(vec_index), 1, over_lvls[1,j])
-
-                  if(j == 1) index_lvls = vec_index
-                  else       index_lvls = index_lvls \ vec_index
-                }
-
-                index_lvls = sort(index_lvls, 1)
-                values = st_vlmap(st_varvaluelabel(input_bd.oi.list[1,i]), index_lvls[.,3])
-
-                for(j=1; j<=rows(index_lvls); j++)
-                {
-                  line = line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
-
-                  break_col = 2 + ((index_lvls[j,1] - 1) * input_bd.st.count)
-                  break_line = break_line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, break_col)
-                }
-
-              /* Total */
-
-                if(input_bd.opt.ovo_total)
-                {
-                  if(i == cols(input_bd.oi.list)) line = line, J(1, input_bd.st.count, "Total")
-                  else                            line = line, J(1, input_bd.st.count, "")
-
-                  break_col = 2 + (input_bd.oi.count * input_bd.st.count)
-                  break_line = break_line, J(1, input_bd.st.count, break_col)
-                }
-
-              /* P-Values */
-
-                if(p_count > 0)
-                {
-                  if(i == cols(input_bd.oi.list)) line = line, J(1, p_count, "P-Values")
-                  else                            line = line, J(1, p_count, "")
-
-                  break_col = 2 + ((input_bd.oi.count + input_bd.opt.ovo_total) * input_bd.st.count)
-                  break_line = break_line, J(1, p_count, break_col)
-                }
-
-              table[i,.] = line
-              breaks[i,.] = break_line
-            }
+            postscripts = postscripts :+ ((vi.results.ovr_pvalue :< bd.opt.test.stars[i]) :* uchar(735))
           }
 
-        /* Over - Single */
-
-          if(input_bd.opt.ovo_sep == 0 | cols(input_bd.oi.list) == 1 | input_bd.opt.ovo_labels == 0)
-          {
-            table = J(1, 1 + (group_count * input_bd.st.count) + p_count, "")
-            breaks = J(1, 1 + (group_count * input_bd.st.count) + p_count, .)
-
-            line = "{space " + strofreal(name_width + 2) + "}"
-            break_line = .
-
-            /* Over Variable */
-
-              for(i=1; i<=input_bd.oi.count; i++)
-              {
-                line = line, J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
-
-                break_col = 2 + ((i - 1) * input_bd.st.count)
-                break_line = break_line, J(1, input_bd.st.count, break_col)
-              }
-
-            /* Total */
-
-              if(input_bd.opt.ovo_total)
-              {
-                line = line, J(1, input_bd.st.count, "Total")
-
-                break_col = 2 + (input_bd.oi.count * input_bd.st.count)
-                break_line = break_line, J(1, input_bd.st.count, break_col)
-              }
-
-            /* P-Values */
-
-              if(p_count > 0)
-              {
-                line = line, J(1, p_count, "P-Values")
-
-                break_col = 2 + ((input_bd.oi.count + input_bd.opt.ovo_total) * input_bd.st.count)
-                break_line = break_line, J(1, p_count, break_col)
-              }
-
-            table[1,.] = line
-            breaks[1,.] = break_line
-          }
-
-        /* Frequencies & Stats - 1 Statistic */
-
-          if(input_bd.st.count == 1)
-          {
-            line = "{space " + strofreal(name_width + 2) + "}{c |}"
-
-            line = line, J(1, input_bd.oi.count + input_bd.opt.ovo_total, (" {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ input_bd.st.name_abbrev :+ "} "))
-
-            if(input_bd.opt.pval_show > 0)
-            {
-              line = line, (" {" :+ al :+ " 6:" :+ abbrev("Overall", 6) :+ "} ")
-            }
-
-            if(input_bd.opt.pval_show == 2)
-            {
-              for(i=1; i<=(input_bd.oi.count-1); i++)
-              {
-                line = line, (" {" :+ al :+ " 6:" :+ abbrev((strofreal(i) :+ "v" :+ strofreal(range(i+1, input_bd.oi.count, 1)))', 6) :+ "} ")
-              }
-            }
-
-            table = table \ line
-          }
-
-        /* Frequencies & Stats - 2+ Statistics */
-
-          if(input_bd.st.count > 1)
-          {
-            /* Frequencies */
-
-              line = "{space " + strofreal(name_width + 2) + "}"
-
-              for(i=1; i<=input_bd.oi.count; i++)
-              {
-                line = line, J(1, input_bd.st.count, ("(n = " + strofreal(input_bd.oi.freqs[i,1], "%9.0gc") + ")"))
-              }
-
-              if(input_bd.opt.ovo_total == 1)
-              {
-                line = line, J(1, input_bd.st.count, ("(n = " + strofreal(sum(input_bd.oi.freqs), "%9.0gc") + ")"))
-              }
-
-              if(input_bd.opt.pval_show > 0)
-              {
-                line = line, J(1, p_count, "")
-              }
-
-              table = table \ line
-
-              breaks = breaks \ breaks[rows(breaks),.]
-
-            /* Stats */
-
-              line = "{space " + strofreal(name_width + 2) + "}{c |}"
-              line = line, J(1, group_count, " {" :+ al :+ " " :+ strofreal(input_bd.st.col_length) :+ ":" :+ abbrev(input_bd.st.name_abbrev, input_bd.st.col_length) :+ "} ")
-
-              if(input_bd.opt.pval_show > 0)
-              {
-                line = line, (" {" :+ al :+ " 6:" :+ abbrev("Overall", 6) :+ "} ")
-              }
-
-              if(input_bd.opt.pval_show == 2)
-              {
-                for(i=1; i<=(input_bd.oi.count-1); i++)
-                {
-                  line = line, (" {" :+ al :+ " 6:" :+ abbrev((strofreal(i) :+ "v" :+ strofreal(range(i+1, input_bd.oi.count, 1)))', 6) :+ "} ")
-                }
-              }
-
-              table = table \ line
-          }
-
-        /* Separator */
-
-          separator = "{hline " + strofreal(name_width + 2) + "}{c +}"
-          separator = separator, J(1, group_count, ("{hline " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}"))
-          separator = separator, J(1, p_count, ("{hline 8}"))
-
-          table = table \ separator
-
-        /* Header Row */
-
-          header_row = rows(table) - 2
-          stats_row  = header_row + 1
-
-      /* Variables & Statistics */
-
-        for(i=1; i<=input_bd.vi.var_count; i++)
-        {
-          if(i > 1)
-          {
-            if(input_bd.vi.series_position[1,i] == 1)
-            {
-              table = table \ separator
-            }
-
-            if(input_bd.vi.series_position[1,i] == . & input_bd.vi.series_position[1,(i-1)] != .)
-            {
-              table = table \ separator
-            }
-          }
-
-          table = table \ printResultsWide(input_bd, input_bd.res[1,i], name_width)
+          positions = selectindex(J(groups, 1, bd.si.stars))
+          stats_table[.,positions] = stats_table[.,positions] :+ postscripts
         }
 
-      /* Printing */
+      /* P-Values - Scripts */
 
-        v_separator = table[(stats_row..rows(table)),1]
-        v_separator = substr(v_separator, strrpos(v_separator, "{"))
-
-        v_pos = range(1, group_count, 1)'
-        v_pos = 2 :+ (v_pos :* input_bd.st.count)
-
-        col_size = name_width, J(1, group_count, input_bd.st.col_length), J(1, p_count, 6)
-        col_size = col_size :+ 2
-
-        for(i=1; i<=rows(table_cols); i++)
+        if(bd.opt.test.individual & bd.opt.test.scripts != . & any(bd.si.scripts))
         {
-          if(rows(table_cols) > 1)
+          postscripts = J(rows(vi.answers), rows(bd.oi.levels), "")
+
+          for(i=1; i<=rows(bd.oi.levels); i++)
           {
-            printf("\n(" + strofreal(i) + "/" + strofreal(rows(table_cols)) + ")\n")
+            positions = range(i, i + ((rows(bd.oi.levels) - 1) * rows(bd.oi.levels)), rows(bd.oi.levels))
+            postscripts = postscripts :+ ((vi.results.ind_pvalue[.,positions] :< bd.opt.test.scripts) :* uchar(bd.opt.test.letters[i]))
           }
 
-          print_table = table[.,1]
-
-          /* Header - Over */
-
-            for(j=1; j<=header_row; j++)
-            {
-              for(k=table_cols[i,1]; k<=table_cols[i,2]; k++)
-              {
-                if(k != table_cols[i,1] & max(k :== breaks[j,.]) == 0)
-                {
-                  continue
-                }
-
-                /* Getting vectorIndex's of value */
-                if(k == table_cols[i,1] & max(k :== breaks[j,.]) == 0)
-                {
-                  index = table_cols[i,1], table_cols[i,2]
-                }
-                else
-                {
-                  index = selectindex(k :== breaks[j,.])
-                  index = select(index, (index :>= table_cols[i,1]) :& (index :<= table_cols[i,2]))
-                  index = vectorIndex(index)
-                }
-
-                /* If not starting a range, continue */
-                if(!inlist(k, index[.,1]))
-                {
-                  continue
-                }
-
-                index = index[selectindex(k :== index[.,1]),.]
-                width = sum(col_size[1,(index[1,1]..index[1,2])]) - 2
-
-                /* If not P-Values, look for v_sep */
-                if(table[j,k] != "P-Values")
-                {
-                  width = width + floor((index[1,2] - index[1,1]) / input_bd.st.count)
-                }
-
-                print_table[j,1] = print_table[j,1] :+ "{c |} {center " :+ strofreal(width) :+ ":" :+ abbrev(table[j,k], width) :+ "} "
-              }
-            }
-
-          /* Other */
-
-            for(j=table_cols[i,1]; j<=table_cols[i,2]; j++)
-            {
-              if(inlist(j, v_pos) & j != table_cols[i,1])
-              {
-                print_table[(stats_row..rows(print_table)),1] = print_table[(stats_row..rows(print_table)),1] :+ v_separator
-              }
-
-              print_table[(stats_row..rows(print_table)),1] = print_table[(stats_row..rows(print_table)),1] :+ table[(stats_row..rows(table)),j]
-            }
-
-          display(print_table)
-        }
-    }
-
-  /* printResultsWide() */
-
-    string matrix printResultsWide(struct braddev scalar input_bd,
-                                   struct results scalar input_res,
-                                   real           scalar name_width)
-    {
-      /* Alignment */
-
-        al = input_bd.opt.dis_align
-
-      /* Initializing Table */
-
-        group_count = input_bd.oi.count + input_bd.opt.ovo_total
-        p_count     = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * (factorial(input_bd.oi.count)/(factorial(2) * factorial(input_bd.oi.count-2))))
-
-        table = J(group_count, input_bd.st.count, "")
-
-      /* Stats */
-
-        for(i=1; i<=input_bd.st.count; i++)
-        {
-          /* Getting Stat */
-
-            if(input_bd.st.name_short[1,i] == "obs")  values = input_res.vals_obs
-            if(input_bd.st.name_short[1,i] == "nyes") values = input_res.vals_nyes
-            if(input_bd.st.name_short[1,i] == "mean") values = input_res.vals_mean
-            if(input_bd.st.name_short[1,i] == "se")   values = input_res.vals_se
-            if(input_bd.st.name_short[1,i] == "lci")  values = input_res.vals_ci[.,1]
-            if(input_bd.st.name_short[1,i] == "uci")  values = input_res.vals_ci[.,2]
-            if(input_bd.st.name_short[1,i] == "ci")   values = input_res.vals_ci
-            if(input_bd.st.name_short[1,i] == "sd")   values = input_res.vals_sd
-            if(input_bd.st.name_short[1,i] == "var")  values = input_res.vals_var
-            if(input_bd.st.name_short[1,i] == "min")  values = input_res.vals_minmax[.,1]
-            if(input_bd.st.name_short[1,i] == "max")  values = input_res.vals_minmax[.,2]
-
-          /* Percent (1) */
-
-            if(input_bd.opt.dis_percent & input_res.binary & !inlist(input_bd.st.name_short[1,i], ("obs", "nyes")))
-            {
-              values = values :* 100
-            }
-
-          /* Format */
-
-            values = strofreal(values, input_bd.st.col_format[1,i])
-
-          /* Percent (2) */
-
-            if(input_bd.opt.dis_percent & input_res.binary * !inlist(input_bd.st.name_short[1,i], ("obs", "nyes")))
-            {
-              values = values :+ ((values :!= ".") :* "%")
-            }
-
-          /* Specific Additions */
-
-            if(input_bd.st.name_short[1,i] == "ci")
-            {
-              values = (values[.,1] :!= ".") :* (substr(input_bd.opt.ci_notation,1,1) :+ values[.,1] :+ input_bd.opt.ci_separator :+ values[.,2] :+ substr(input_bd.opt.ci_notation,2,1))
-              values = values :+ ((values :== "") :* ".")
-            }
-
-            if(input_bd.st.name_short[1,i] == "mean" & cols(input_res.ps_stars) > 0)
-            {
-              values = values :+ input_res.ps_stars
-            }
-
-            if(input_bd.st.name_short[1,i] == "ci" & cols(input_res.ps_scripts) > 0)
-            {
-              values = values :+ input_res.ps_scripts
-            }
-
-          /* Setting Field Size */
-
-            values = " {" :+ al :+ " " :+ strofreal(input_bd.st.col_length[1,i]) :+ ":" :+ values :+ "} "
-
-          /* Adding to Table */
-
-            table[.,i] = values
-        }
-
-        table = rowshape(table, 1)
-
-      /* P-Values */
-
-        if(input_bd.opt.pval_show > 0)
-        {
-          if(nonmissing(input_res.vals_povr) == 0)
+          for(i=1; i<=sum(bd.si.scripts); i++)
           {
-            table = table, (" {" :+ al :+ " 6:" :+ strofreal(., "%6.4f") :+ "} ")
+            positions = range(0, rows(bd.oi.levels) - 1, 1) :* rows(bd.si.name) :+ selectindex(bd.si.scripts)[i]
+            stats_table[.,positions] = stats_table[.,positions] :+ postscripts
+          }
+        }
+
+      /* Removing Missing Values */
+
+        stats_table = (nonmissing :* stats_table) :+ (!nonmissing :* ".")
+
+      /* Reshaping */
+
+        if(!bd.opt.display.wide) stats_table = colshape(stats_table, rows(bd.si.name))
+
+      /* P-Values - Overall */
+
+        if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+        {
+          strings = J(rows(vi.answers), 1 + bd.opt.test.statistic, "")
+
+          if(bd.opt.test.statistic)
+          {
+            nonmissing = selectindex(vi.results.ovr_statistic :!= .)
+
+            strings[.,1] = strofreal(vi.results.ovr_statistic, "%32.2f")
+
+            if(vi.type == "xi" & bd.opt.test.chi_overall)
+            {
+              strings[nonmissing,1] = "Chi2 = " :+ strings[nonmissing,1]
+            }
+            else
+            {
+              if(bd.opt.test.t_overall) strings[nonmissing,1] = "t = " :+ strings[nonmissing,1]
+              else                      strings[nonmissing,1] = "F = " :+ strings[nonmissing,1]
+            }
+          }
+
+          strings[.,cols(strings)] = strofreal(vi.results.ovr_pvalue, "%6.4f")
+
+          if(bd.opt.display.wide) stats_table = stats_table, strings
+          else                    stats_table = stats_table, colshape(J(1, groups, strings), cols(strings))
+        }
+
+      /* P-Values - Individual */
+
+        if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+        {
+          if(bd.opt.display.wide)
+          {
+            cols = 1 + bd.opt.test.statistic
+
+            positions = range(1, rows(bd.oi.levels) * rows(bd.oi.levels), 1)
+            positions = rowshape(positions, rows(bd.oi.levels))'
+            positions = vech(positions[(2..rows(bd.oi.levels)),(1..(rows(bd.oi.levels)-1))])'
+
+            strings = J(rows(vi.answers), cols(positions) * cols, "")
+
+            if(bd.opt.test.statistic)
+            {
+              nonmissing = (vi.results.ind_statistic[.,positions] :!= .)
+
+              if(bd.opt.test.t_individual) values1 = "t = " :+ strofreal(vi.results.ind_statistic[.,positions], "%32.2f")
+              else                         values1 = "F = " :+ strofreal(vi.results.ind_statistic[.,positions], "%32.2f")
+
+              values1 = (values1 :* nonmissing) :+ ("." :* !nonmissing)
+
+              strings[.,range(1, (cols(positions) * cols) - 1, cols)] = values1
+            }
+
+            strings[.,range(cols, (cols(positions) * cols), cols)] = strofreal(vi.results.ind_pvalue[.,positions], "%6.4f")
+
+            stats_table = stats_table, strings
           }
           else
           {
-            values = select(input_res.vals_povr, (input_res.vals_povr :!= .))[1,1]
-            table = table, (" {" :+ al :+ " 6:" :+ strofreal(values, "%6.4f") :+ "} ")
+            cols = 1 + bd.opt.test.statistic
+
+            values1 = J(rows(vi.answers), cols(vi.results.ind_statistic) * cols, "")
+
+            if(bd.opt.test.statistic)
+            {
+              nonmissing = (vi.results.ind_statistic :!= .)
+
+              if(bd.opt.test.t_individual) values2 = "t = " :+ strofreal(vi.results.ind_statistic, "%32.2f")
+              else                         values2 = "F = " :+ strofreal(vi.results.ind_statistic, "%32.2f")
+
+              values2 = (values2 :* nonmissing) :+ ("." :* !nonmissing)
+
+              values1[.,range(1, (cols(vi.results.ind_statistic) * cols) - 1, cols)] = values2
+            }
+
+            values2 = strofreal(vi.results.ind_pvalue, "%6.4f")
+
+            values1[.,range(cols, (cols(vi.results.ind_statistic) * cols), cols)] = values2
+
+            strings = J(rows(vi.answers) * groups, rows(bd.oi.levels) * cols, ".")
+
+            for(i=1; i<=rows(vi.answers); i++)
+            {
+              positions = range(1, rows(bd.oi.levels), 1) :+ ((i - 1) * groups)
+
+              strings[positions,.] = rowshape(values1[i,.], rows(bd.oi.levels))
+            }
+
+            stats_table = stats_table, strings
           }
         }
 
-        if(input_bd.opt.pval_show == 2)
+      /* Finishing - Wide & Long, No Over*/
+
+        if(bd.opt.display.wide | groups == 1)
         {
-          values = input_res.vals_pind
+          if(vi.type != "individual")
+          {
+            stats_table = ("{ralign 80:" :+ substr(vi.answers, 1, 80) :+ "}"), stats_table
+            stats_table = J(1, cols(stats_table), "") \ stats_table
 
-          values = vech(values[(2..rows(values)-input_bd.opt.ovo_total),(1..(cols(values)-1))])'
-
-          table = table, (" {" :+ al :+ " 6:" :+ strofreal(values, "%6.4f") :+ "} ")
-        }
-
-      /* Name */
-
-        if(input_res.series_position == .)
-        {
-          table = ("{res} {lalign " + strofreal(name_width) + ":" + abbrev(input_res.display_name, name_width) + "} {res}{c |}"), table
-        }
-        else
-        {
-          table = ("{txt} {ralign " + strofreal(name_width) + ":" + abbrev(input_res.display_name, name_width) + "} {res}{c |}"), table
-        }
-
-      /* Series */
-
-        if(input_res.series_position == 1)
-        {
-          line = "{res} {lalign " + strofreal(name_width) + ":" + abbrev(input_res.display_series, name_width) + "} {res}{c |}"
-          line = line, J(1, group_count, ("{space " :+ strofreal(input_bd.st.col_length :+ 2) :+ "}"))
-          line = line, J(1, p_count, "{space 8}")
-
-          table = line \ table
-        }
-
-      return(table)
-    }
-
-  /* printFooter() */
-
-    void printFooter(struct braddev scalar input_bd)
-    {
-      if(inlist("mean", input_bd.st.name_short) & cols(input_bd.opt.pval_stars) > 0)
-      {
-        for(i=1; i<=cols(input_bd.opt.pval_stars); i++)
-        {
-          line = i * uchar(735) + ((cols(input_bd.opt.pval_stars) - i + 1) * " ")
-          line = line + "p(overall) < 0" + strofreal(revorder(input_bd.opt.pval_stars)[1,i]) + "\n"
-          printf(line)
-        }
-      }
-
-      if(inlist("ci", input_bd.st.name_short) & input_bd.opt.pval_scripts != .)
-      {
-        table = input_bd.code_list[1,(1..input_bd.oi.count)]'
-        table = table :+ `" sig. diff. from ""' :+ input_bd.oi.name_select :+ `"" (p < 0"' :+ strofreal(input_bd.opt.pval_scripts) :+ ")"
-        display(table)
-      }
-    }
-
-  end
-
-**======================================================================**
-**   Mata Structure - excel                                             **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* parseExcel () */
-
-    struct excel scalar parseExcel()
-    {
-      struct excel scalar xl
-      xl = excel()
-
-      /* Setting Output On/Off */
-
-        xl.output = st_local("excel") != ""
-        if(xl.output == 0) return(xl)
-
-      /* Defaults */
-
-        xl.file_path = pathjoin(c("pwd"), "bradmean_output.xlsx")
-        xl.sheet = "Sheet1"
-
-      /* Reading Options */
-
-        t = tokeninit(" ", (""), (`""""', `"`""'"', "()"), 1)
-        tokenset(t, st_local("excel"))
-
-        while((token = tokenget(t)) != "")
-        {
-          if(strpos(token, "rep")      == 1) { xl.bookreplace  = 1; continue; }
-          if(strpos(token, "mod")      == 1) { xl.bookreplace  = 0; continue; }
-          if(strpos(token, "sheetrep") == 1) { xl.sheetreplace = 1; continue; }
-
-          /* File */
-
-            if(strpos(token, "f") == 1)
+            if((vi.type == "xi" & bd.opt.display.xi_variables) | (vi.type == "series" & bd.opt.display.series_variables))
             {
-              if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+              stats_table[1,1] = "{lalign 80:" + substr(vi.question, 1, 80) + "}"
+            }
+            else
+            {
+              stats_table[1,1] = "{lalign 80:" + substr(vi.term, 1, 80) + "}"
+            }
+          }
+          else
+          {
+            stats_table = ("{lalign 80:" + substr(vi.term, 1, 80) + "}"), stats_table
+          }
+
+          stats_table = J(1, cols(stats_table), "") \ stats_table
+
+          return(stats_table)
+        }
+
+      /* Finishing - Long, Over */
+
+        if(!bd.opt.display.wide & groups > 1)
+        {
+          if(bd.opt.over.labels) strings = "{ralign 80:" :+ substr(bd.oi.labels, 1, 80) :+ "}"
+          else                   strings = "{ralign 80:" :+ substr("_over_" :+ strofreal(bd.oi.levels), 1, 80) :+ "}"
+
+          if(bd.opt.over.total) strings = strings \ ("{ralign 80:Total}")
+
+          stats_table = J(rows(vi.answers), 1, strings), stats_table
+
+          return_table = J(rows(stats_table) + (2 * rows(vi.answers)), cols(stats_table), "")
+
+          for(i=1; i<=rows(vi.answers); i++)
+          {
+            pos1 = (i*2) + ((i-1) * groups)
+            pos2 = range(pos1 + 1, pos1 + groups, 1)
+            pos3 = range(1, groups, 1) :+ ((i-1) * groups)
+
+            return_table[pos1,1] = "{lalign 80:" :+ vi.varlist[i] :+ "}"
+            return_table[pos2,.] = stats_table[pos3,.]
+          }
+
+          return(return_table)
+        }
+
+      return("")
+    }
+
+  /* function : printTableWide() */
+
+    void printTableWide(struct braddev scalar bd)
+    {
+      /* Results */
+
+        for(i=1; i<=rows(bd.vi); i++)
+        {
+          if(i==1) results_table = seriesTable(bd.vi[i], bd)
+          else     results_table = results_table \ seriesTable(bd.vi[i], bd)
+        }
+
+      /* Separators (1) */
+
+        if(!bd.opt.display.separator)
+        {
+          pos1 = selectindex(rowmax(results_table :!= ""))
+          results_table = J(1, cols(results_table), "") \ results_table[pos1,.]
+        }
+
+      /* Formatting Lengths */
+
+        /* Name */
+
+          length = max(udstrlen(substr(results_table[.,1], 12, udstrlen(results_table[.,1])))) - 1
+
+          results_table[.,1] = subinstr(results_table[.,1], "align 80:", "align " + strofreal(length) + ":")
+
+        /* Stats */
+
+          pos1 = selectindex(rowmax(results_table :!= ""))
+
+          col_lengths = colmax(udstrlen(results_table[.,(2..cols(results_table))]))
+
+          pos2 = selectindex(col_lengths :< 5)
+          if(cols(pos2) > 0)
+          {
+            col_lengths[pos2] = J(1, cols(pos2), 5)
+          }
+
+          results_table[pos1,(2..cols(results_table))] = "{" :+ bd.opt.display.align :+ " " :+ strofreal(col_lengths) :+ ":" :+ results_table[pos1,(2..cols(results_table))] :+ "}"
+
+          results_table[pos1,.] = " " :+ results_table[pos1,.] :+ " "
+
+        col_lengths = length, col_lengths
+
+        col_lengths = col_lengths :+ 2
+
+      /* Table Columns */
+
+        breaks = rows(bd.oi.levels) + bd.opt.over.total
+
+        if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+        {
+          breaks = breaks + 1
+        }
+
+        if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+        {
+          breaks = breaks + factorial(rows(bd.oi.levels)) / (2 * factorial(rows(bd.oi.levels)-2))
+        }
+
+        linesize = c("linesize")
+        if(linesize < 140) linesize = 140
+        if(linesize > 240) linesize = 240
+
+        table_columns = J(1, cols(col_lengths), .)
+
+        length = col_lengths[1] + 2 + breaks
+
+        j = 1
+        for(i=2; i<=cols(table_columns); i++)
+        {
+          if((length + col_lengths[i] + 2) > linesize)
+          {
+            j = j + 1
+            length = col_lengths[1] + 2 + breaks
+          }
+
+          length = length + col_lengths[i] + 2
+
+          table_columns[i] = j
+        }
+
+      /* Header - First Row */
+
+        pos1 = cols(results_table)
+
+        groups = bd.opt.display.wide ? (rows(bd.oi.levels) + bd.opt.over.total) : 1
+
+        header = "{space " + strofreal(col_lengths[1]) + "}"
+        header = header, J(1, groups, bd.si.label')
+
+        pvalues = (pos1 - cols(header)) / (1 + bd.opt.test.statistic)
+
+        if(pvalues > 0)
+        {
+          if(bd.opt.test.statistic) header = header, J(1, pvalues, ("Stat", "P-Val"))
+          else                      header = header, J(1, pvalues, "P-Val")
+        }
+
+        header[2..pos1] = abbrev(header[2..pos1], col_lengths[2..pos1] :- 2)
+        header[2..pos1] = " {" :+ bd.opt.display.align :+ " " :+ strofreal(col_lengths[2..pos1] :- 2) :+ ":" :+ header[2..pos1] :+ "} "
+
+        results_table = header \ results_table
+
+      /* Header - Second Row */
+
+        header = J(1, cols(col_lengths), "")
+
+        /* Group Labels */
+
+          if(bd.opt.over.group_n)
+          {
+            labels = bd.oi.freqs
+            if(bd.opt.over.total) labels = labels \ sum(labels)
+
+            labels = "(n = " :+ strtrim(strofreal(labels, "%32.0fc")) :+ ")"
+          }
+          else
+          {
+            labels = bd.oi.labels
+            if(bd.opt.over.total) labels = labels \ "Total"
+          }
+
+          for(i=1; i<=groups; i++)
+          {
+            pos1 = 2 + ((i-1) * rows(bd.si.name))
+            pos2 = pos1 + rows(bd.si.name) - 1
+
+            header[pos1..pos2] = J(1, (pos2 - pos1 + 1), labels[i])
+          }
+
+        /* P-Values */
+
+          if(pvalues > 0)
+          {
+            pos1 = pos2 + 1
+            pos2 = pos2 + 1 + bd.opt.test.statistic
+
+            if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+            {
+              header[pos1..pos2] = J(1, 1 + bd.opt.test.statistic, "Overall")
+
+              pos1 = pos2 + 1
+              pos2 = pos2 + 1 + bd.opt.test.statistic
+            }
+
+            if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+            {
+              for(i=1; i<=rows(bd.oi.labels); i++)
               {
-                token = tokenget(t)
-                token = substr(token, 2, strlen(token) - 2)
-                token = subinstr(token, `"""', "", .)
-
-                file_path = pathjoin(c("pwd"), "bradmean_output.xlsx")
-
-                if(pathsuffix(token) == "")
+                for(j=i+1; j<=rows(bd.oi.labels); j++)
                 {
-                  file_path = pathjoin(token, "bradmean_output.xlsx")
-                }
-                else
-                {
-                  if(inlist(pathsuffix(token), (".xlsx", ".xls"))) file_path = token
-                  else file_path = pathrmsuffix(token) + ".xlsx"
-                }
+                  header[pos1..pos2] = J(1, 1 + bd.opt.test.statistic, strofreal(i) + "v" + strofreal(j))
 
-                pathsplit(file_path, path1, path2)
-                if(direxists(path1) == 0)
-                {
-                  printf("{error:Directory does not exist, defaulting to " + `"""' + c("pwd") + `"""' + "}\n")
-                  file_path = pathjoin(c("pwd"), path2)
+                  pos1 = pos2 + 1
+                  pos2 = pos2 + 1 + bd.opt.test.statistic
                 }
+              }
+            }
+          }
 
-                xl.file_path = file_path
+        new_lengths = J(1, cols(col_lengths), 0)
+
+        for(i=2; i<=cols(header); i++)
+        {
+          for(j=i; j<=cols(header); j++)
+          {
+            if(header[i] == header[j] & table_columns[i] == table_columns[j])
+            {
+              new_lengths[i] = new_lengths[i] + col_lengths[j]
+              if(j == cols(header)) i = j + 1
+            }
+            else
+            {
+              i = j - 1
+              break
+            }
+          }
+        }
+
+        pos1 = selectindex(new_lengths :> 0)
+        pos2 = selectindex(new_lengths :== 0)
+
+        new_lengths[pos1] = new_lengths[pos1] :- 2
+
+        pos1 = selectindex(new_lengths :> 0 :& new_lengths :<= 32)
+        if(cols(pos1) > 0) header[pos1] = abbrev(header[pos1], new_lengths[pos1])
+
+        pos1 = selectindex(new_lengths :> 32)
+        if(cols(pos1) > 0) header[pos1] = substr(header[pos1], 1, new_lengths[pos1])
+
+        pos1 = selectindex(new_lengths :> 0)
+
+        header[pos1] = " {center " :+ strofreal(new_lengths[pos1]) :+ ":" :+ strtrim(header[pos1]) :+ "} "
+        header[pos2] = header[pos2] :* 0
+
+        header[1] = "{space " :+ strofreal(col_lengths[1]) :+ "}"
+
+        results_table = header \ results_table
+
+      /* Header - Third Row */
+
+        if(bd.opt.over.group_n)
+        {
+          header = J(1, cols(col_lengths), "")
+
+          /* Group Labels */
+
+            labels = bd.oi.labels
+            if(bd.opt.over.total) labels = labels \ "Total"
+
+            for(i=1; i<=groups; i++)
+            {
+              pos1 = 2 + ((i-1) * rows(bd.si.name))
+              pos2 = pos1 + rows(bd.si.name) - 1
+
+              header[pos1..pos2] = J(1, (pos2 - pos1 + 1), labels[i])
+            }
+
+          new_lengths = J(1, cols(col_lengths), 0)
+
+          for(i=2; i<=cols(header); i++)
+          {
+            for(j=i; j<=cols(header); j++)
+            {
+              if(header[i] == header[j] & table_columns[i] == table_columns[j])
+              {
+                new_lengths[i] = new_lengths[i] + col_lengths[j]
+                if(j == cols(header)) i = j + 1
+              }
+              else
+              {
+                i = j - 1
+                break
+              }
+            }
+          }
+
+          pos1 = selectindex(new_lengths :> 0)
+          pos2 = selectindex(new_lengths :== 0)
+
+          new_lengths[pos1] = new_lengths[pos1] :- 2
+
+          pos1 = selectindex(new_lengths :> 0 :& new_lengths :<= 32)
+          if(cols(pos1) > 0) header[pos1] = abbrev(header[pos1], new_lengths[pos1])
+
+          pos1 = selectindex(new_lengths :> 32)
+          if(cols(pos1) > 0) header[pos1] = substr(header[pos1], 1, new_lengths[pos1])
+
+          pos1 = selectindex(new_lengths :> 0)
+
+          header[pos1] = " {center " :+ strofreal(new_lengths[pos1]) :+ ":" :+ strtrim(header[pos1]) :+ "} "
+          header[pos2] = header[pos2] :* 0
+
+          if(pvalues > 0)
+          {
+            pos2 = 2 + (rows(bd.si.name) * groups)
+            header[pos2..cols(header)] = "{space " :+ strofreal(col_lengths[pos2..cols(header)]) :+ "}"
+          }
+
+          header[1] = "{space " :+ strofreal(col_lengths[1]) :+ "}"
+
+          results_table = header \ results_table
+        }
+
+      /* Separators (2) */
+
+        /* Horizontal */
+
+          pos1 = selectindex(!rowmax(results_table :!= ""))
+
+          h_separator = "{hline " :+ strofreal(col_lengths) :+ "}"
+
+          if(rows(pos1) > 0) results_table[pos1,.] = J(rows(pos1), 1, h_separator)
+
+          results_table = results_table \ h_separator
+
+        /* Vertical */
+
+          breaks = range(1, groups + 1, 1)
+          breaks = 2 :+ ((breaks :- 1) :* rows(bd.si.name))
+
+          if(pvalues > 1 & bd.opt.test.statistic)
+          {
+            labels = range(1, pvalues + 1, 1)
+            breaks = breaks \ breaks[rows(breaks)] :+ ((labels :- 1) :* 2)
+          }
+
+          v_separator = J(rows(results_table), 1, "{c |}")
+
+          if(rows(pos1) > 0)
+          {
+            v_separator[pos1] = J(rows(pos1), 1, "{c +}")
+          }
+
+          v_separator[rows(v_separator)] = "{c BT}"
+
+      /* Printing */
+
+        for(i=1; i<=max(table_columns); i++)
+        {
+          pos1 = selectindex(table_columns :== i)
+
+          if(max(table_columns) > 1)
+          {
+            printf("\n(" + strofreal(i) + "/" + strofreal(max(table_columns)) + ")\n")
+          }
+
+          print_table = "{res}" :+ results_table[.,1]
+
+          for(j=1; j<=cols(pos1); j++)
+          {
+            if(j == 1 | anyof(breaks, pos1[j]))
+            {
+              print_table = print_table :+ v_separator
+            }
+
+            print_table = print_table :+ results_table[.,pos1[j]]
+          }
+
+          display(print_table)
+        }
+    }
+
+  /* function : printTableLong() */
+
+    void printTableLong(struct braddev scalar bd)
+    {
+      /* Results */
+
+        for(i=1; i<=rows(bd.vi); i++)
+        {
+          if(i==1) results_table = seriesTable(bd.vi[i], bd)
+          else     results_table = results_table \ seriesTable(bd.vi[i], bd)
+        }
+
+      /* Separators (1) */
+
+        if(!bd.opt.display.separator)
+        {
+          pos1 = selectindex(rowmax(results_table :!= ""))
+          results_table = J(1, cols(results_table), "") \ results_table[pos1,.]
+        }
+
+      /* Formatting Lengths */
+
+        /* Name */
+
+          length = max(udstrlen(substr(results_table[.,1], 12, udstrlen(results_table[.,1])))) - 1
+
+          results_table[.,1] = subinstr(results_table[.,1], "align 80:", "align " + strofreal(length) + ":")
+
+        /* Stats */
+
+          pos1 = selectindex(rowmax(results_table :!= ""))
+
+          col_lengths = colmax(udstrlen(results_table[.,(2..cols(results_table))]))
+
+          pos2 = selectindex(col_lengths :< 5)
+          if(cols(pos2) > 0)
+          {
+            col_lengths[pos2] = J(1, cols(pos2), 5)
+          }
+
+          results_table[pos1,(2..cols(results_table))] = "{" :+ bd.opt.display.align :+ " " :+ strofreal(col_lengths) :+ ":" :+ results_table[pos1,(2..cols(results_table))] :+ "}"
+
+          results_table[pos1,.] = " " :+ results_table[pos1,.] :+ " "
+
+        col_lengths = length, col_lengths
+
+        col_lengths = col_lengths :+ 2
+
+      /* Table Columns */
+
+        breaks = 1
+
+        if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+        {
+          breaks = breaks + 1
+        }
+
+        if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+        {
+          breaks = breaks + rows(bd.oi.levels)
+        }
+
+        linesize = c("linesize")
+        if(linesize < 140) linesize = 140
+        if(linesize > 240) linesize = 240
+
+        table_columns = J(1, cols(col_lengths), .)
+
+        length = col_lengths[1] + 2 + breaks
+
+        j = 1
+        for(i=2; i<=cols(table_columns); i++)
+        {
+          if((length + col_lengths[i] + 2) > linesize)
+          {
+            j = j + 1
+            length = col_lengths[1] + 2 + breaks
+          }
+
+          length = length + col_lengths[i] + 2
+
+          table_columns[i] = j
+        }
+
+      /* Header - First Row */
+
+        pos1 = cols(results_table)
+
+        header = ("{space " + strofreal(col_lengths[1]) + "}"), bd.si.label'
+
+        pvalues = (pos1 - cols(header)) / (1 + bd.opt.test.statistic)
+
+        if(pvalues > 0)
+        {
+          if(bd.opt.test.statistic) header = header, J(1, pvalues, ("Stat", "P-Val"))
+          else                      header = header, J(1, pvalues, "P-Val")
+        }
+
+        header[2..pos1] = abbrev(header[2..pos1], col_lengths[2..pos1] :- 2)
+        header[2..pos1] = " {" :+ bd.opt.display.align :+ " " :+ strofreal(col_lengths[2..pos1] :- 2) :+ ":" :+ header[2..pos1] :+ "} "
+
+        results_table = header \ results_table
+
+      /* Header - Second Row */
+
+        if(pvalues > 0)
+        {
+          /* P-Values */
+
+            header = J(1, cols(col_lengths), "")
+
+            pos1 = 2 + rows(bd.si.name)
+            pos2 = pos1 + bd.opt.test.statistic
+
+            if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+            {
+              header[pos1..pos2] = J(1, 1 + bd.opt.test.statistic, "Overall")
+
+              pos1 = pos2 + 1
+              pos2 = pos2 + 1 + bd.opt.test.statistic
+            }
+
+            if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+            {
+              for(i=1; i<=rows(bd.oi.labels); i++)
+              {
+                header[pos1..pos2] = J(1, 1 + bd.opt.test.statistic, "vs " + strofreal(i))
+
+                pos1 = pos2 + 1
+                pos2 = pos2 + 1 + bd.opt.test.statistic
               }
             }
 
-          /* Sheet */
+          new_lengths = J(1, cols(col_lengths), 0)
 
-            if(strpos(token, "sheet") == 1)
+          for(i=2; i<=cols(header); i++)
+          {
+            for(j=i; j<=cols(header); j++)
             {
-              if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
+              if(header[i] == header[j] & table_columns[i] == table_columns[j])
               {
-                token = tokenget(t)
-                token = substr(token, 2, strlen(token) - 2)
-                token = subinstr(token, `"""', "", .)
-
-                xl.sheet = token
+                new_lengths[i] = new_lengths[i] + col_lengths[j]
+                if(j == cols(header)) i = j + 1
+              }
+              else
+              {
+                i = j - 1
+                break
               }
             }
+          }
 
-          /* Style */
+          pos1 = selectindex(new_lengths :> 0)
+          pos2 = selectindex(new_lengths :== 0)
 
-            if(strpos(token, "style") == 1)
+          new_lengths[pos1] = new_lengths[pos1] :- 2
+
+          pos1 = selectindex(new_lengths :> 0 :& new_lengths :<= 32)
+          if(cols(pos1) > 0) header[pos1] = abbrev(header[pos1], new_lengths[pos1])
+
+          pos1 = selectindex(new_lengths :> 32)
+          if(cols(pos1) > 0) header[pos1] = substr(header[pos1], 1, new_lengths[pos1])
+
+          pos1 = selectindex(new_lengths :> 0)
+
+          header[pos1] = " {center " :+ strofreal(new_lengths[pos1]) :+ ":" :+ strtrim(header[pos1]) :+ "} "
+          header[pos2] = header[pos2] :* 0
+
+          pos2 = 1 + rows(bd.si.name)
+          header[1..pos2] = "{space " :+ strofreal(col_lengths[1..pos2]) :+ "}"
+
+          results_table = header \ results_table
+        }
+
+      /* Separators (2) */
+
+        /* Horizontal */
+
+          pos1 = selectindex(!rowmax(results_table :!= ""))
+
+          h_separator = "{hline " :+ strofreal(col_lengths) :+ "}"
+
+          if(rows(pos1) > 0) results_table[pos1,.] = J(rows(pos1), 1, h_separator)
+
+          results_table = results_table \ h_separator
+
+        /* Vertical */
+
+          breaks = 2 + rows(bd.si.name)
+
+          if(pvalues > 1 & bd.opt.test.statistic)
+          {
+            labels = range(1, pvalues + 1, 1)
+            breaks = breaks \ breaks[rows(breaks)] :+ ((labels :- 1) :* 2)
+          }
+
+          v_separator = J(rows(results_table), 1, "{c |}")
+
+          if(rows(pos1) > 0)
+          {
+            v_separator[pos1] = J(rows(pos1), 1, "{c +}")
+          }
+
+          v_separator[rows(v_separator)] = "{c BT}"
+
+      /* Printing */
+
+        for(i=1; i<=max(table_columns); i++)
+        {
+          pos1 = selectindex(table_columns :== i)
+
+          if(max(table_columns) > 1)
+          {
+            printf("\n(" + strofreal(i) + "/" + strofreal(max(table_columns)) + ")\n")
+          }
+
+          print_table = "{res}" :+ results_table[.,1]
+
+          for(j=1; j<=cols(pos1); j++)
+          {
+            if(j == 1 | anyof(breaks, pos1[j]))
             {
-              if(substr(tokenpeek(t), 1, 1) == "(" & substr(tokenpeek(t), -1, 1) == ")")
-              {
-                token = tokenget(t)
-                token = substr(token, 2, strlen(token) - 2)
-                token = subinstr(token, `"""', "", .)
-
-                if(inlist(token, ("bradfield"))) xl.style = token
-              }
+              print_table = print_table :+ v_separator
             }
+
+            print_table = print_table :+ results_table[.,pos1[j]]
+          }
+
+          display(print_table)
         }
-
-      /* Cleaning Up */
-
-        if(xl.output == 1 & xl.bookreplace == . & xl.sheetreplace == .)
-        {
-          printf(`"{error:Must indicate "replace", "modify", or "sheetreplace"}\n"')
-          xl.output = 0
-        }
-
-        if(xl.sheetreplace == 1)
-        {
-          xl.bookreplace = 0
-        }
-
-      return(xl)
     }
 
-  /* createExcel() */
+/*======================================================================*/
+/*   Mata Structure - excel                                             */
+/*======================================================================*/
 
-    void createExcel(struct braddev scalar input_bd)
+  /* function : createExcel() */
+
+    void createExcel(struct braddev scalar bd)
     {
-      if(input_bd.xl.output == 0) return(J(0,0,.))
+      if(!bd.opt.excel.output) return(J(0,0,.))
 
       /* Initializing Object */
 
@@ -3058,30 +2926,34 @@ end;
 
       /* Loading Book & Setting Worksheet */
 
-        if(fileexists(input_bd.xl.file_path))
+        if(fileexists(bd.opt.excel.file_path))
         {
-          if(input_bd.xl.bookreplace) B.clear_book(input_bd.xl.file_path)
-          B.load_book(input_bd.xl.file_path)
+          if(bd.opt.excel.bookreplace) B.clear_book(bd.opt.excel.file_path)
 
-          if(input_bd.xl.sheet != "")
+          B.load_book(bd.opt.excel.file_path)
+
+          if(bd.opt.excel.sheet == "")
           {
-            if(max(B.get_sheets() :== input_bd.xl.sheet) == 0) B.add_sheet(input_bd.xl.sheet)
-            else B.set_sheet(input_bd.xl.sheet)
-
-            if(input_bd.xl.bookreplace & input_bd.xl.sheet != "Sheet1") B.delete_sheet("Sheet1")
+            B.set_sheet(B.get_sheets()[1])
           }
           else
           {
-            B.set_sheet(B.get_sheets()[1,1])
+            if(anyof(B.get_sheets(), bd.opt.excel.sheet)) B.set_sheet(bd.opt.excel.sheet)
+            else                                          B.add_sheet(bd.opt.excel.sheet)
+
+            if(bd.opt.excel.bookreplace & bd.opt.excel.sheet != "Sheet1") B.delete_sheet("Sheet1")
           }
 
-          if(input_bd.xl.sheetreplace == 1) B.clear_sheet(B.query("sheetname"))
+          if(bd.opt.excel.sheetreplace) B.clear_sheet(B.query("sheetname"))
         }
         else
         {
-          if(input_bd.xl.sheet == "") input_bd.xl.sheet = "Sheet1"
-          B.create_book(input_bd.xl.file_path, input_bd.xl.sheet)
+          if(bd.opt.excel.sheet == "") bd.opt.excel.sheet = "Sheet1"
+
+          B.create_book(bd.opt.excel.file_path, bd.opt.excel.sheet)
         }
+
+        B.set_mode("open")
 
       /* Getting Initial Position */
 
@@ -3103,2351 +2975,1443 @@ end;
           row = row + index[rows(index),1]
         }
 
-      /* Title */
+      /* Creating Table */
 
-        if(input_bd.opt.dis_title != "")
+        if(bd.opt.display.wide)
         {
-          B.put_string(row, col, input_bd.opt.dis_title)
-          B.set_font_bold(row, col, "on")
-
-          if(input_bd.opt.ovo_labels == 0 & input_bd.opt.ovo_legend == 1 & input_bd.oi.count > 0)
-          {
-            B.set_font_underline(row, col, "on")
-          }
-
-          row = row + 1
-        }
-
-      /* Legend */
-
-        if(input_bd.opt.ovo_labels == 0 & input_bd.opt.ovo_legend == 1 & input_bd.oi.count > 0)
-        {
-          legend = input_bd.oi.name_short :+ " | " :+ invtokens(input_bd.oi.list, ", ") :+ `" = ""' :+ input_bd.oi.name_long :+ `"""'
-          B.put_string(row, col, legend)
-          row = row + input_bd.oi.count
-        }
-
-      /* Table */
-
-        B.set_missing("-")
-
-        if(input_bd.oi.count == 0)
-        {
-          excelTableLongNoOver(input_bd, B, row)
-        }
-
-        if(input_bd.oi.count > 0 & input_bd.opt.dis_wide == 0)
-        {
-          excelTableLongOver(input_bd, B, row)
-        }
-
-        if(input_bd.oi.count > 0 & input_bd.opt.dis_wide == 1)
-        {
-          excelTableWide(input_bd, B, row)
-        }
-    }
-
-  /* excelTableLongNoOver() */
-
-    void excelTableLongNoOver(struct braddev scalar input_bd,
-                              class  xl      scalar B,
-                              real           scalar input_row)
-    {
-      sheet = B.query("sheetname")
-
-      /* Positions */
-
-        start_row = input_row
-        end_row   = .
-        row       = start_row
-
-        start_col = 1
-        end_col   = 1 + input_bd.st.count
-        col       = start_col
-
-      /* Styles (1) */
-
-        font_bold = B.add_fontid()
-        B.fontid_set_font_bold(font_bold, "on")
-
-        /* Header - Stats */
-
-          fmt_header_stats = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_header_stats, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_header_stats, "center")
-
-          B.fmtid_set_top_border(fmt_header_stats, "medium")
-          B.fmtid_set_bottom_border(fmt_header_stats, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_header_stats, "solid", "228 223 236")
-
-        /* Variable Names - Main */
-
-          fmt_varname_main = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_varname_main, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_varname_main, "left")
-
-          B.fmtid_set_left_border(fmt_varname_main, "medium")
-          B.fmtid_set_right_border(fmt_varname_main, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_varname_main, "solid", "238 236 225")
-
-        /* Variable Names - Sub */
-
-          fmt_varname_sub = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_varname_sub, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_varname_sub, "right")
-
-          B.fmtid_set_text_indent(fmt_varname_sub, 1)
-
-          B.fmtid_set_left_border(fmt_varname_sub, "medium")
-          B.fmtid_set_right_border(fmt_varname_sub, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_varname_sub, "solid", "238 236 225")
-
-        /* Statistics */
-
-          stats = input_bd.st.name_short
-
-          formats = J(1,1,"")
-
-          for(i=1; i<=cols(stats); i++)
-          {
-            if(stats[1,i] == "mean" & cols(input_bd.opt.pval_stars) > 0)
-            {
-              formats = formats, "fmt_stat_str"
-              continue
-            }
-
-            if(inlist(stats[1,i], ("lci", "uci")) & input_bd.opt.dis_round != input_bd.opt.ci_round)
-            {
-              formats = formats, "fmt_stat_ci"
-              continue
-            }
-
-            if(stats[1,i] == "obs")  { formats = formats, "fmt_stat_obs"; continue; }
-            if(stats[1,i] == "nyes") { formats = formats, "fmt_stat_obs"; continue; }
-            if(stats[1,i] == "mean") { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "se")   { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "lci")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "uci")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "ci")   { formats = formats, "fmt_stat_str"; continue; }
-            if(stats[1,i] == "sd")   { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "var")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "min")  { formats = formats, "fmt_stat_minmax"; continue; }
-            if(stats[1,i] == "max")  { formats = formats, "fmt_stat_minmax"; continue; }
-          }
-
-          formats = formats[1,(2..cols(formats))]
-
-      /* Header */
-
-        col = 2
-
-        B.put_string(row, col, input_bd.st.name_long)
-
-        B.set_fmtid(row, (col, end_col), fmt_header_stats)
-
-        row = row + 1
-
-      /* Variable Names & Formats */
-
-        /* Values */
-
-          table        = J(1,1,"")
-          style        = J(1,2,"")
-          format_table = formats
-
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            /* Series */
-
-              if(input_bd.vi.series_position[1,i] == 1)
-              {
-                series = input_bd.vi.display_series[1,i]
-
-                style = style \ ("main", "blank")
-                table = table \ series
-
-                if(input_bd.res[1,i].binary == 1 & input_bd.opt.dis_percent == 1)
-                {
-                  format_table = format_table \ subinstr(subinstr(formats, "fmt_stat_num", "fmt_stat_pct"), "fmt_stat_ci", "fmt_stat_ci_pct")
-                }
-                else
-                {
-                  format_table = format_table \ formats
-                }
-              }
-
-            /* Variable Name */
-
-              table = table \ input_bd.vi.display_name[1,i]
-
-              if(input_bd.vi.series_position[1,i] == .) style = style \ ("main", "")
-              else                                      style = style \ ("sub", "")
-
-              if(input_bd.res[1,i].binary == 1 & input_bd.opt.dis_percent == 1)
-              {
-                format_table = format_table \ subinstr(subinstr(formats, "fmt_stat_num", "fmt_stat_pct"), "fmt_stat_ci", "fmt_stat_ci_pct")
-              }
-              else
-              {
-                format_table = format_table \ formats
-              }
-
-            /* Separator */
-
-              if(input_bd.vi.series_position[1,i] == -1)
-              {
-                style[rows(style), 2] = "sep"
-              }
-
-              if(i != input_bd.vi.var_count)
-              {
-                if(input_bd.vi.series_position[1,i] == . & input_bd.vi.series_position[1,i+1] != .)
-                {
-                  style[rows(style), 2] = "sep"
-                }
-              }
-          }
-
-          table        = table[(2..rows(table)), .]
-          style        = style[(2..rows(style)), .]
-          format_table = format_table[(2..rows(format_table)), .]
-
-          end_row = row + rows(table) - 1
-
-          B.put_string(row, start_col, table)
-
-        /* Style */
-
-          if(sum(style[.,1] :== "main") > 0)
-          {
-            select_rows = vectorIndex(selectindex(style[.,1] :== "main")') :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.set_fmtid((select_rows[i,1], select_rows[i,2]), start_col, fmt_varname_main)
-            }
-          }
-
-          if(sum(style[.,1] :== "sub") > 0)
-          {
-            select_rows = vectorIndex(selectindex(style[.,1] :== "sub")') :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.set_fmtid((select_rows[i,1], select_rows[i,2]), start_col, fmt_varname_sub)
-            }
-          }
-
-          width = max((10 \ udstrlen(table))) + 2
-          B.set_column_width(start_col, start_col, width)
-
-      /* Statistics */
-
-        /* Placing Values */
-
-          excelResultsLongNoOver(input_bd, B, row, end_row)
-
-        /* Formatting */
-
-          /* fmt_stat_obs */
-
-            if(sum(format_table :== "fmt_stat_obs") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_obs"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_obs"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_obs = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_obs, "center")
-                B.fmtid_set_number_format(fmt_stat_obs, "#,##0")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_obs)
-                  }
-                }
-            }
-
-          /* fmt_stat_num */
-
-            if(sum(format_table :== "fmt_stat_num") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_num"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_num"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_num = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_num, "center")
-                fmt = "0" + ((input_bd.opt.dis_round > 0) * ".") + (input_bd.opt.dis_round * "0")
-                B.fmtid_set_number_format(fmt_stat_num, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_num)
-                  }
-                }
-            }
-
-          /* fmt_stat_pct */
-
-            if(sum(format_table :== "fmt_stat_pct") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_pct"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_pct"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_pct = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_pct, "center")
-                fmt = "0" + ((input_bd.opt.dis_round > 0) * ".") + (input_bd.opt.dis_round * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_pct, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_pct)
-                  }
-                }
-            }
-
-          /* fmt_stat_ci */
-
-            if(sum(format_table :== "fmt_stat_ci") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_ci"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_ci"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_ci = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_ci, "center")
-                fmt = "0" + ((input_bd.opt.ci_round > 0) * ".") + (input_bd.opt.ci_round * "0")
-                B.fmtid_set_number_format(fmt_stat_ci, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_ci)
-                  }
-                }
-            }
-
-          /* fmt_stat_cipct */
-
-            if(sum(format_table :== "fmt_stat_cipct") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_cipct"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_cipct"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_cipct = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_cipct, "center")
-                fmt = "0" + ((input_bd.opt.ci_round > 0) * ".") + (input_bd.opt.ci_round * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_cipct, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_cipct)
-                  }
-                }
-            }
-
-          /* fmt_stat_minmax */
-
-            if(sum(formats :== "fmt_stat_minmax") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_minmax"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_minmax"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_minmax = B.add_fmtid()
-
-                B.fmtid_set_horizontal_align(fmt_stat_minmax, "center")
-
-                if(sum(stats :== "min") > 0) fmt = selectindex(input_bd.st.name_short :== "min")[1,1]
-                else                         fmt = selectindex(input_bd.st.name_short :== "max")[1,1]
-
-                fmt = strtoreal(substr(input_bd.st.col_format[1,fmt], -2, 1))
-                fmt = "0" + ((fmt > 0) * ".") + (fmt * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_minmax, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_minmax)
-                  }
-                }
-            }
-
-          /* fmt_stat_str */
-
-            if(sum(formats :== "fmt_stat_str") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_str"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_str"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_str = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_str, "center")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_minmax)
-                  }
-                }
-            }
-
-      /* Styles (2) */
-
-        /* Blank Cells */
-
-          if(sum(style[.,2] :== "blank") > 0)
-          {
-            select_rows = selectindex(style[.,2] :== "blank") :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.put_string(select_rows[i,1], start_col + 1, J(1, end_col - start_col, ""))
-            }
-          }
-
-        /* Separator */
-
-          if(sum(style[.,2] :== "sep") > 0)
-          {
-            select_rows = selectindex(style[.,2] :== "sep") :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.set_bottom_border((select_rows[i,1], select_rows[i,1]), (start_col, end_col), "thin")
-            }
-          }
-
-        /* Overall Borders */
-
-          B.set_border(start_row, start_col, "medium")
-          B.set_bottom_border((end_row, end_row), (start_col, end_col), "medium")
-          B.set_right_border((start_row, end_row), (end_col, end_col), "medium")
-    }
-
-  /* excelResultsLongNoOver() */
-
-    void excelResultsLongNoOver(struct braddev scalar input_bd,
-                                class  xl      scalar B,
-                                real           scalar start_row,
-                                real           scalar end_row)
-    {
-      /* Getting Type */
-
-        stat_types = (input_bd.st.name_short :!= "ci") :* "numeric"
-
-        string_pos = selectindex(stat_types :== "")
-
-        for(i=1; i<=cols(string_pos); i++)
-        {
-          stat_types[1,string_pos[1,i]] = "string"
-        }
-
-      /* Creating Numeric Table */
-
-        rows = input_bd.vi.var_count + cols(selectindex(input_bd.vi.series_position :== 1))
-        cols = input_bd.st.count
-
-        table = J(rows, cols, .)
-
-        for(i=1; i<=input_bd.st.count; i++)
-        {
-          if(stat_types[1,i] == "string") continue
-
-          row = 1
-          for(j=1; j<=cols(input_bd.res); j++)
-          {
-            if(input_bd.res[1,j].series_position == 1) row = row + 1
-
-            /* Getting Stat */
-
-              if(input_bd.st.name_short[1,i] == "obs")  values = input_bd.res[1,j].vals_obs
-              if(input_bd.st.name_short[1,i] == "nyes") values = input_bd.res[1,j].vals_nyes
-              if(input_bd.st.name_short[1,i] == "mean") values = input_bd.res[1,j].vals_mean
-              if(input_bd.st.name_short[1,i] == "se")   values = input_bd.res[1,j].vals_se
-              if(input_bd.st.name_short[1,i] == "lci")  values = input_bd.res[1,j].vals_ci[.,1]
-              if(input_bd.st.name_short[1,i] == "uci")  values = input_bd.res[1,j].vals_ci[.,2]
-              if(input_bd.st.name_short[1,i] == "sd")   values = input_bd.res[1,j].vals_sd
-              if(input_bd.st.name_short[1,i] == "var")  values = input_bd.res[1,j].vals_var
-              if(input_bd.st.name_short[1,i] == "min")  values = input_bd.res[1,j].vals_minmax[.,1]
-              if(input_bd.st.name_short[1,i] == "max")  values = input_bd.res[1,j].vals_minmax[.,2]
-
-            /* Adding to Table */
-
-              table[row,i] = values
-
-            row = row + 1
-          }
-        }
-
-        B.put_number(start_row, 2, table)
-
-      /* Creating String Columns */
-
-        if(cols(string_pos) > 0)
-        {
-          table = J(rows, 1, "")
-
-          row = 1
-          col = string_pos[1,1]
-
-          for(j=1; j<=cols(input_bd.res); j++)
-          {
-            if(input_bd.res[1,j].series_position == 1) row = row + 1
-
-            values = input_bd.res[1,j].vals_ci
-
-            if(input_bd.res[1,j].binary & input_bd.opt.dis_percent)
-            {
-              values = values :* 100
-            }
-
-            values = strofreal(values, input_bd.st.col_format[1,col])
-
-            if(input_bd.res[1,j].binary & input_bd.opt.dis_percent)
-            {
-              values = values :+ ((values :!= ".") :* "%")
-            }
-
-            values = (values[.,1] :!= ".") :* (substr(input_bd.opt.ci_notation,1,1) :+ values[.,1] :+ input_bd.opt.ci_separator :+ values[.,2] :+ substr(input_bd.opt.ci_notation,2,1))
-            values = values :+ ((values :== "") :* "-")
-
-            table[row,1] = values
-
-            row = row + 1
-          }
-
-          B.put_string(start_row, col + 1, table)
-        }
-    }
-
-  /* excelTableLongOver() */
-
-    void excelTableLongOver(struct braddev scalar input_bd,
-                            class  xl      scalar B,
-                            real           scalar input_row)
-    {
-      sheet = B.query("sheetname")
-
-      group_count = input_bd.oi.count + input_bd.opt.ovo_total
-      p_count     = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * input_bd.oi.count)
-
-      /* Positions */
-
-        start_row = input_row
-        end_row   = input_row + (input_bd.opt.pval_show > 0) + ((1 + input_bd.oi.count + input_bd.opt.ovo_total) * input_bd.vi.var_count)
-        row       = start_row
-
-        header_row = start_row + (input_bd.opt.pval_show > 0)
-
-        start_col = 1
-        end_col   = 1 + input_bd.st.count + p_count
-        col       = start_col
-
-        p_col = 2 + input_bd.st.count
-
-      /* Styles (1) */
-
-        font_bold = B.add_fontid()
-        B.fontid_set_font_bold(font_bold, "on")
-
-        /* First Square */
-
-          fmt_first_square = B.add_fmtid()
-
-          B.fmtid_set_left_border(fmt_first_square, "medium")
-          B.fmtid_set_right_border(fmt_first_square, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_first_square, "solid", "white")
-
-        /* Header - Stats */
-
-          fmt_header_stats = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_header_stats, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_header_stats, "center")
-
-          B.fmtid_set_fill_pattern(fmt_header_stats, "solid", "228 223 236")
-
-        /* Header - P-Values */
-
-          if(input_bd.opt.pval_show > 0)
-          {
-            fmt_header_pvals = B.add_fmtid()
-
-            B.fmtid_set_fontid(fmt_header_pvals, font_bold)
-
-            B.fmtid_set_horizontal_align(fmt_header_pvals, "center")
-
-            B.fmtid_set_fill_pattern(fmt_header_pvals, "solid", "218 238 243")
-          }
-
-        /* Variable Names - Main */
-
-          fmt_varname_main = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_varname_main, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_varname_main, "left")
-
-          B.fmtid_set_left_border(fmt_varname_main, "medium")
-          B.fmtid_set_right_border(fmt_varname_main, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_varname_main, "solid", "238 236 225")
-
-        /* Variable Names - Sub */
-
-          fmt_varname_sub = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_varname_sub, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_varname_sub, "right")
-
-          B.fmtid_set_text_indent(fmt_varname_sub, 1)
-
-          B.fmtid_set_left_border(fmt_varname_sub, "medium")
-          B.fmtid_set_right_border(fmt_varname_sub, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_varname_sub, "solid", "238 236 225")
-
-        /* Statistics */
-
-          stats = input_bd.st.name_short
-
-          formats = J(1,1,"")
-
-          for(i=1; i<=cols(stats); i++)
-          {
-            if(stats[1,i] == "mean" & cols(input_bd.opt.pval_stars) > 0)
-            {
-              formats = formats, "fmt_stat_str"
-              continue
-            }
-
-            if(inlist(stats[1,i], ("lci", "uci")) & input_bd.opt.dis_round != input_bd.opt.ci_round)
-            {
-              formats = formats, "fmt_stat_ci"
-              continue
-            }
-
-            if(stats[1,i] == "obs")  { formats = formats, "fmt_stat_obs"; continue; }
-            if(stats[1,i] == "nyes") { formats = formats, "fmt_stat_obs"; continue; }
-            if(stats[1,i] == "mean") { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "se")   { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "lci")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "uci")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "ci")   { formats = formats, "fmt_stat_str"; continue; }
-            if(stats[1,i] == "sd")   { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "var")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "min")  { formats = formats, "fmt_stat_minmax"; continue; }
-            if(stats[1,i] == "max")  { formats = formats, "fmt_stat_minmax"; continue; }
-          }
-
-          formats = formats[1,(2..cols(formats))]
-
-          formats = formats, J(1, p_count, "fmt_stat_pval")
-
-      /* Header */
-
-        /* Groupings */
-
-          row = start_row
-
-          if(input_bd.opt.pval_show > 0)
-          {
-            B.put_string(start_row, p_col, "P-Values")
-            B.set_sheet_merge(sheet, (row, row), (p_col, end_col))
-
-            row = row + 1
-          }
-
-        /* Stats */
-
-          col = 2
-
-          table = input_bd.st.name_long
-          if(input_bd.opt.pval_show > 0)  table = table, "Overall"
-          if(input_bd.opt.pval_show == 2) table = table, ("vs " :+ input_bd.oi.name_select')
-
-          B.put_string(row, col, table)
-
-        /* Style */
-
-          B.set_fmtid((start_row, header_row), start_col, fmt_first_square)
-
-          B.set_fmtid((start_row, header_row), (col, p_col - 1), fmt_header_stats)
-
-          if(input_bd.opt.pval_show > 0)
-          {
-            B.set_fmtid((start_row, header_row), (p_col, end_col), fmt_header_pvals)
-          }
-
-          if(input_bd.opt.pval_show == 2)
-          {
-            width = max((8 \ (udstrlen("vs " :+ input_bd.oi.name_select)))) + 1
-            B.set_column_width(p_col + 1, end_col, width)
-          }
-
-      /* Variable Names & Formats */
-
-        /* Values */
-
-          if(input_bd.vi.series_count == 1) table = input_bd.vi.display_name
-          else                              table = input_bd.vi.name_original
-
-          table = table \ J(1, input_bd.vi.var_count, input_bd.oi.name_select)
-          table = table \ J(input_bd.opt.ovo_total, input_bd.vi.var_count, "Total")
-
-          table = vec(table)
-
-          B.put_string(header_row + 1, start_col, table)
-
-        /* Formats */
-
-          format_table = formats
-
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            if(input_bd.res[1,i].binary == 1 & input_bd.opt.dis_percent == 1)
-            {
-              format_table = format_table \ J(group_count + 1, 1, subinstr(subinstr(formats, "fmt_stat_num", "fmt_stat_pct"), "fmt_stat_ci", "fmt_stat_ci_pct"))
-            }
-            else
-            {
-              format_table = format_table \ J(group_count + 1, 1, formats)
-            }
-          }
-
-          format_table = format_table[(2..rows(format_table)), .]
-
-        /* Style */
-
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            row = header_row + 1 + ((i-1) * (input_bd.oi.count + input_bd.opt.ovo_total + 1))
-            B.set_fmtid(row, start_col, fmt_varname_main)
-          }
-
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            row_1 = header_row + 2 + ((i-1) * (input_bd.oi.count + input_bd.opt.ovo_total + 1))
-            row_2 = row_1 + (input_bd.oi.count + input_bd.opt.ovo_total - 1)
-            B.set_fmtid((row_1, row_2), start_col, fmt_varname_sub)
-          }
-
-          width = max((10 \ udstrlen(table))) + 2
-          B.set_column_width(start_col, start_col, width)
-
-      /* Statistics */
-
-        /* Placing Values */
-
-          row = header_row + 1
-
-          excelResultsLongOver(input_bd, B, row, end_row)
-
-        /* Formatting */
-
-          /* fmt_stat_obs */
-
-            if(sum(format_table :== "fmt_stat_obs") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_obs"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_obs"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_obs = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_obs, "center")
-                B.fmtid_set_number_format(fmt_stat_obs, "#,##0")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_obs)
-                  }
-                }
-            }
-
-          /* fmt_stat_num */
-
-            if(sum(format_table :== "fmt_stat_num") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_num"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_num"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_num = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_num, "center")
-                fmt = "0" + ((input_bd.opt.dis_round > 0) * ".") + (input_bd.opt.dis_round * "0")
-                B.fmtid_set_number_format(fmt_stat_num, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_num)
-                  }
-                }
-            }
-
-          /* fmt_stat_pct */
-
-            if(sum(format_table :== "fmt_stat_pct") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_pct"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_pct"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_pct = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_pct, "center")
-                fmt = "0" + ((input_bd.opt.dis_round > 0) * ".") + (input_bd.opt.dis_round * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_pct, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_pct)
-                  }
-                }
-            }
-
-          /* fmt_stat_ci */
-
-            if(sum(format_table :== "fmt_stat_ci") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_ci"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_ci"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_ci = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_ci, "center")
-                fmt = "0" + ((input_bd.opt.ci_round > 0) * ".") + (input_bd.opt.ci_round * "0")
-                B.fmtid_set_number_format(fmt_stat_ci, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_ci)
-                  }
-                }
-            }
-
-          /* fmt_stat_cipct */
-
-            if(sum(format_table :== "fmt_stat_cipct") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_cipct"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_cipct"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_cipct = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_cipct, "center")
-                fmt = "0" + ((input_bd.opt.ci_round > 0) * ".") + (input_bd.opt.ci_round * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_cipct, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_cipct)
-                  }
-                }
-            }
-
-          /* fmt_stat_minmax */
-
-            if(sum(formats :== "fmt_stat_minmax") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_minmax"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_minmax"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_minmax = B.add_fmtid()
-
-                B.fmtid_set_horizontal_align(fmt_stat_minmax, "center")
-
-                if(sum(stats :== "min") > 0) fmt = selectindex(input_bd.st.name_short :== "min")[1,1]
-                else                         fmt = selectindex(input_bd.st.name_short :== "max")[1,1]
-
-                fmt = strtoreal(substr(input_bd.st.col_format[1,fmt], -2, 1))
-                fmt = "0" + ((fmt > 0) * ".") + (fmt * "0")
-                B.fmtid_set_number_format(fmt_stat_minmax, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_minmax)
-                  }
-                }
-            }
-
-          /* fmt_stat_str */
-
-            if(sum(formats :== "fmt_stat_str") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_str"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_str"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_str = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_str, "center")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_str)
-                  }
-                }
-            }
-
-          /* fmt_stat_pval */
-
-            if(sum(format_table :== "fmt_stat_pval") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_pval"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_pval"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_pval = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_pval, "center")
-                B.fmtid_set_number_format(fmt_stat_pval, "0.0000")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_pval)
-                  }
-                }
-            }
-
-      /* Footer */
-
-        table = J(0,0,"")
-
-        if(inlist("mean", input_bd.st.name_short) & cols(input_bd.opt.pval_stars) > 0)
-        {
-          for(i=1; i<=cols(input_bd.opt.pval_stars); i++)
-          {
-            line = i * uchar(735) + ((cols(input_bd.opt.pval_stars) - i + 1) * " ")
-            line = line + "p(overall) < 0" + strofreal(revorder(input_bd.opt.pval_stars)[1,i])
-
-            if(cols(table) == 0) table = line
-            else                 table = table \ line
-          }
-        }
-
-        if(inlist("ci", input_bd.st.name_short) & input_bd.opt.pval_scripts != .)
-        {
-          line = input_bd.code_list[1,(1..input_bd.oi.count)]'
-          line = line :+ `" sig. diff. from ""' :+ input_bd.oi.name_select :+ `"" (p < 0"' :+ strofreal(input_bd.opt.pval_scripts) :+ ")"
-
-          if(cols(table) == 0) table = line
-          else                 table = table \ line
-        }
-
-        if(cols(table) > 0)
-        {
-          B.put_string(end_row + 1, start_col, table)
-        }
-
-      /* Styles (2) */
-
-        /* Blank Cells */
-
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            row = header_row + 1 + ((i-1) * (input_bd.oi.count + input_bd.opt.ovo_total + 1))
-            B.put_string(row, 2, J(1, end_col - start_col, ""))
-          }
-
-        /* Separator */
-
-          row = header_row
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            row = row + 1 + input_bd.oi.count + input_bd.opt.ovo_total
-            B.set_bottom_border((row, row), (start_col, end_col), "thin")
-          }
-
-        /* Borders */
-
-          B.set_top_border((start_row, start_row), (start_col, end_col), "medium")
-          B.set_bottom_border((header_row, header_row), (start_col, end_col), "medium")
-          B.set_bottom_border((end_row, end_row), (start_col, end_col), "medium")
-
-          B.set_right_border((start_row, end_row), (end_col, end_col), "medium")
-
-          if(input_bd.opt.pval_show > 0)
-          {
-            B.set_left_border((start_row, end_row), (p_col, p_col), "medium")
-          }
-    }
-
-  /* excelResultsLongOver() */
-
-    void excelResultsLongOver(struct braddev scalar input_bd,
-                              class  xl      scalar B,
-                              real           scalar start_row,
-                              real           scalar end_row)
-    {
-      /* Getting Type */
-
-        stat_types = (input_bd.st.name_short :!= "ci") :* "numeric"
-
-        if(cols(input_bd.opt.pval_stars) > 0 & inlist("mean", input_bd.st.name_short))
-        {
-          stat_types[1,selectindex(input_bd.st.name_short :== "mean")[1,1]] = ""
-        }
-
-        string_pos = selectindex(stat_types :== "")
-
-        for(i=1; i<=cols(string_pos); i++)
-        {
-          stat_types[1,string_pos[1,i]] = "string"
-        }
-
-      /* Creating Numeric Table */
-
-        group_count = input_bd.oi.count + input_bd.opt.ovo_total
-        p_count     = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * input_bd.oi.count)
-
-        rows = (group_count + 1) * input_bd.vi.var_count
-        cols = input_bd.st.count + p_count
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          table = J(group_count, cols, .)
-
-          /* Stats */
-
-            for(j=1; j<=input_bd.st.count; j++)
-            {
-              if(stat_types[1,j] == "string") continue
-
-              /* Getting Stat */
-
-                if(input_bd.st.name_short[1,j] == "obs")  values = input_bd.res[1,i].vals_obs
-                if(input_bd.st.name_short[1,j] == "nyes") values = input_bd.res[1,i].vals_nyes
-                if(input_bd.st.name_short[1,j] == "mean") values = input_bd.res[1,i].vals_mean
-                if(input_bd.st.name_short[1,j] == "se")   values = input_bd.res[1,i].vals_se
-                if(input_bd.st.name_short[1,j] == "lci")  values = input_bd.res[1,i].vals_ci[.,1]
-                if(input_bd.st.name_short[1,j] == "uci")  values = input_bd.res[1,i].vals_ci[.,2]
-                if(input_bd.st.name_short[1,j] == "sd")   values = input_bd.res[1,i].vals_sd
-                if(input_bd.st.name_short[1,j] == "var")  values = input_bd.res[1,i].vals_var
-                if(input_bd.st.name_short[1,j] == "min")  values = input_bd.res[1,i].vals_minmax[.,1]
-                if(input_bd.st.name_short[1,j] == "max")  values = input_bd.res[1,i].vals_minmax[.,2]
-
-              /* Adding to Table */
-
-                table[.,j] = values
-            }
-
-          /* P-Values */
-
-            if(input_bd.opt.pval_show > 0)
-            {
-              col = input_bd.st.count + 1
-
-              table[.,col] = input_bd.res[1,i].vals_povr
-            }
-
-            if(input_bd.opt.pval_show == 2)
-            {
-              for(j=1; j<=input_bd.oi.count; j++)
-              {
-                table[.,(col+j)] = input_bd.res[1,i].vals_pind[.,j]
-              }
-            }
-
-          /* Adding to Overall Table */
-
-            if(i == 1) full_table = J(1, cols, .) \ table
-            else       full_table = full_table \ (J(1, cols, .) \ table)
-        }
-
-        B.put_number(start_row, 2, full_table)
-
-      /* Creating String Table */
-
-        if(cols(string_pos) > 0)
-        {
-          for(i=1; i<=cols(string_pos); i++)
-          {
-            for(j=1; j<=cols(input_bd.res); j++)
-            {
-              /* Getting Stat */
-
-                if(input_bd.st.name_short[1,string_pos[1,i]] == "mean") values = input_bd.res[1,j].vals_mean
-                if(input_bd.st.name_short[1,string_pos[1,i]] == "ci")   values = input_bd.res[1,j].vals_ci
-
-              /* Specific (Mean) */
-
-                if(input_bd.st.name_short[1,string_pos[1,i]] == "mean" & cols(input_bd.opt.pval_stars) > 0)
-                {
-                  if(input_bd.res[1,j].binary & input_bd.opt.dis_percent)
-                  {
-                    values = values :* 100
-                  }
-
-                  values = strofreal(values, input_bd.st.col_format[1,string_pos[1,i]])
-
-                  if(input_bd.res[1,j].binary & input_bd.opt.dis_percent)
-                  {
-                    values = values :+ ((values :!= ".") :* "%")
-                  }
-
-                  values = ((values :!= ".") :* values) :+ ((values :== ".") :* "-")
-
-                  values = values :+ input_bd.res[1,j].ps_stars
-                }
-
-              /* Specific (CI) */
-
-                if(input_bd.st.name_short[1,string_pos[1,i]] == "ci")
-                {
-                  if(input_bd.res[1,j].binary & input_bd.opt.dis_percent)
-                  {
-                    values = values :* 100
-                  }
-
-                  values = strofreal(values, input_bd.st.col_format[1,string_pos[1,i]])
-
-                  if(input_bd.res[1,j].binary & input_bd.opt.dis_percent)
-                  {
-                    values = values :+ ((values :!= ".") :* "%")
-                  }
-
-                  values = (values[.,1] :!= ".") :* (substr(input_bd.opt.ci_notation,1,1) :+ values[.,1] :+ input_bd.opt.ci_separator :+ values[.,2] :+ substr(input_bd.opt.ci_notation,2,1))
-                  values = values :+ ((values :== "") :* "-")
-
-                  if(input_bd.opt.pval_scripts != .) values = values :+ input_bd.res[1,j].ps_scripts
-                }
-
-              /* Adding to Overall Table */
-
-                if(j == 1) full_table = "" \ values
-                else       full_table = full_table \ ("" \ values)
-            }
-
-            B.put_string(start_row, 1 + string_pos[1,i], full_table)
-          }
-        }
-    }
-
-  /* excelTableWide() */
-
-    void excelTableWide(struct braddev scalar input_bd,
-                        class  xl      scalar B,
-                        real           scalar input_row)
-    {
-      sheet = B.query("sheetname")
-
-      p_count = (input_bd.opt.pval_show > 0) + (input_bd.opt.pval_show == 2) * (factorial(input_bd.oi.count)/(factorial(2) * factorial(input_bd.oi.count-2)))
-      group_count = input_bd.oi.count + input_bd.opt.ovo_total
-
-      /* Positions */
-
-        start_row = input_row
-        end_row   = .
-        row       = start_row
-
-        start_col = 1
-        end_col   = 1 + (input_bd.st.count * group_count) + p_count
-        col       = start_col
-
-        p_col = 2 + (input_bd.st.count * group_count)
-
-      /* Styles (1) */
-
-        font_bold = B.add_fontid()
-        B.fontid_set_font_bold(font_bold, "on")
-
-        /* First Square */
-
-          fmt_first_square = B.add_fmtid()
-
-          B.fmtid_set_left_border(fmt_first_square, "medium")
-          B.fmtid_set_right_border(fmt_first_square, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_first_square, "solid", "white")
-
-        /* Header - Stats */
-
-          fmt_header_stats = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_header_stats, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_header_stats, "center")
-
-          B.fmtid_set_fill_pattern(fmt_header_stats, "solid", "228 223 236")
-
-        /* Header - P-Values */
-
-          if(input_bd.opt.pval_show > 0)
-          {
-            fmt_header_pvals = B.add_fmtid()
-
-            B.fmtid_set_fontid(fmt_header_pvals, font_bold)
-
-            B.fmtid_set_horizontal_align(fmt_header_pvals, "center")
-
-            B.fmtid_set_text_wrap(fmt_header_pvals, "on")
-
-            B.fmtid_set_fill_pattern(fmt_header_pvals, "solid", "218 238 243")
-          }
-
-        /* Variable Names - Main */
-
-          fmt_varname_main = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_varname_main, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_varname_main, "left")
-
-          B.fmtid_set_left_border(fmt_varname_main, "medium")
-          B.fmtid_set_right_border(fmt_varname_main, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_varname_main, "solid", "238 236 225")
-
-        /* Variable Names - Sub */
-
-          fmt_varname_sub = B.add_fmtid()
-
-          B.fmtid_set_fontid(fmt_varname_sub, font_bold)
-
-          B.fmtid_set_horizontal_align(fmt_varname_sub, "right")
-
-          B.fmtid_set_text_indent(fmt_varname_sub, 1)
-
-          B.fmtid_set_left_border(fmt_varname_sub, "medium")
-          B.fmtid_set_right_border(fmt_varname_sub, "medium")
-
-          B.fmtid_set_fill_pattern(fmt_varname_sub, "solid", "238 236 225")
-
-        /* Statistics */
-
-          stats = input_bd.st.name_short
-
-          formats = J(1,1,"")
-
-          for(i=1; i<=cols(stats); i++)
-          {
-            if(stats[1,i] == "mean" & cols(input_bd.opt.pval_stars) > 0)
-            {
-              formats = formats, "fmt_stat_str"
-              continue
-            }
-
-            if(inlist(stats[1,i], ("lci", "uci")) & input_bd.opt.dis_round != input_bd.opt.ci_round)
-            {
-              formats = formats, "fmt_stat_ci"
-              continue
-            }
-
-            if(stats[1,i] == "obs")  { formats = formats, "fmt_stat_obs"; continue; }
-            if(stats[1,i] == "nyes") { formats = formats, "fmt_stat_obs"; continue; }
-            if(stats[1,i] == "mean") { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "se")   { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "lci")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "uci")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "ci")   { formats = formats, "fmt_stat_str"; continue; }
-            if(stats[1,i] == "sd")   { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "var")  { formats = formats, "fmt_stat_num"; continue; }
-            if(stats[1,i] == "min")  { formats = formats, "fmt_stat_minmax"; continue; }
-            if(stats[1,i] == "max")  { formats = formats, "fmt_stat_minmax"; continue; }
-          }
-
-          formats = formats[1,(2..cols(formats))]
-
-          formats = J(1, group_count, formats)
-
-          formats = formats, J(1, p_count, "fmt_stat_pval")
-
-      /* Header */
-
-        /* Separate */
-
-          if(input_bd.opt.ovo_sep == 1 & cols(input_bd.oi.list) > 1 & input_bd.opt.ovo_labels == 1)
-          {
-            width = 8
-
-            for(i=1; i<=cols(input_bd.oi.list); i++)
-            {
-              stata("qui levelsof " + input_bd.oi.list[1,i] + " if !missing(" + st_local("group_var") + "), local(over_lvls)")
-              over_lvls = strtoreal(tokens(st_local("over_lvls")))
-
-              /* Over Variable */
-
-                for(j=1; j<=cols(over_lvls); j++)
-                {
-                  stata("qui levelsof " + st_local("group_var") + " if " + input_bd.oi.list[1,i] + " == " + strofreal(over_lvls[1,j]) + ", local(curr_lvls)")
-                  curr_lvls = strtoreal(tokens(st_local("curr_lvls")))
-
-                  vec_index = vectorIndex(curr_lvls)
-                  vec_index = vec_index, J(rows(vec_index), 1, over_lvls[1,j])
-
-                  if(j == 1) index_lvls = vec_index
-                  else       index_lvls = index_lvls \ vec_index
-                }
-
-                index_lvls = sort(index_lvls, 1)
-                values = st_vlmap(st_varvaluelabel(input_bd.oi.list[1,i]), index_lvls[.,3])
-
-                curr_width = udstrlen(values) :/ (((index_lvls[.,2] - index_lvls[.,1]) :+ 1) :* input_bd.st.count)
-                width = max((width \ curr_width))
-
-                for(j=1; j<=rows(index_lvls); j++)
-                {
-                  if(j == 1)
-                  {
-                    line = J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
-                    break_line = J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, index_lvls[j,1])
-                  }
-                  else
-                  {
-                    line = line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, values[j,1])
-                    break_line = break_line, J(1, (index_lvls[j,2] - index_lvls[j,1] + 1) * input_bd.st.count, index_lvls[j,1])
-                  }
-                }
-
-              /* Total */
-
-                if(i == cols(input_bd.oi.list)) line = line, J(1, input_bd.opt.ovo_total * input_bd.st.count, "Total")
-                else                            line = line, J(1, input_bd.opt.ovo_total * input_bd.st.count, "")
-
-                if(input_bd.opt.ovo_total == 1)
-                {
-                  width = max((width \ (udstrlen("Total") / input_bd.st.count)))
-                  break_line = break_line, J(1, input_bd.st.count, input_bd.oi.count + 1)
-                }
-
-              /* P-Values */
-
-                if(i == cols(input_bd.oi.list)) line = line, J(1, p_count, "P-Values")
-                else                            line = line, J(1, p_count, "")
-
-                if(p_count > 0)
-                {
-                  break_line = break_line, J(1, p_count, input_bd.oi.count + input_bd.opt.ovo_total + 1)
-                }
-
-              if(i == 1)
-              {
-                table = line
-                breaks = break_line
-              }
-              else
-              {
-                table = table \ line
-                breaks = breaks \ break_line
-              }
-            }
-
-            header_row = start_row + cols(input_bd.oi.list)
-          }
-
-        /* Single */
-
-          if(input_bd.opt.ovo_sep == 0 | cols(input_bd.oi.list) == 1 | input_bd.opt.ovo_labels == 0)
-          {
-            width = 8
-
-            /* Over Variable */
-
-              for(i=1; i<=input_bd.oi.count; i++)
-              {
-                if(i == 1)
-                {
-                  table = J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
-                  breaks = J(1, input_bd.st.count, i)
-                }
-                else
-                {
-                  table = table, J(1, input_bd.st.count, input_bd.oi.name_select[i,1])
-                  breaks = breaks, J(1, input_bd.st.count, i)
-                }
-              }
-
-              curr_width = udstrlen(input_bd.oi.name_select) :/ input_bd.st.count
-              width = max((width \ curr_width))
-
-            /* Total */
-
-              table = table, J(1, input_bd.opt.ovo_total * input_bd.st.count, "Total")
-
-              if(input_bd.opt.ovo_total == 1)
-              {
-                width = max((width \ (udstrlen("Total") / input_bd.st.count)))
-                breaks = breaks, J(1, input_bd.st.count, input_bd.oi.count + 1)
-              }
-
-            /* P-Values */
-
-              table = table, J(1, p_count, "P-Values")
-
-              if(p_count > 0)
-              {
-                breaks = breaks, J(1, p_count, input_bd.oi.count + input_bd.opt.ovo_total + 1)
-              }
-
-            header_row = start_row + 1
-          }
-
-        /* Frequencies & Stats - 1 Statistic */
-
-          if(input_bd.st.count == 1)
-          {
-            line = "(n = " :+ strofreal(input_bd.oi.freqs', "%12.0gc") :+ ")"
-
-            if(input_bd.opt.ovo_total == 1)
-            {
-              line = line, ("(n = " :+ strofreal(sum(input_bd.oi.freqs), "%12.0gc") :+ ")")
-            }
-
-            if(input_bd.opt.pval_show > 0)
-            {
-              line = line, "Overall"
-            }
-
-            if(input_bd.opt.pval_show == 2)
-            {
-              for(i=1; i<=input_bd.oi.count; i++)
-              {
-                for(j=i+1; j<=input_bd.oi.count; j++)
-                {
-                  line = line, (input_bd.oi.name_select[i,1] :+ char(10) :+ " vs " :+ char(10) :+ input_bd.oi.name_select[j,1])
-                }
-              }
-            }
-
-            table = table \ line
-          }
-
-        /* Frequencies & Stats - 2+ Statistics */
-
-          if(input_bd.st.count > 1)
-          {
-            /* Frequencies */
-
-              for(i=1; i<=input_bd.oi.count; i++)
-              {
-                if(i==1) line = J(1, input_bd.st.count, ("(n = " :+ strofreal(input_bd.oi.freqs[i,1], "%12.0gc") :+ ")"))
-                else     line = line, J(1, input_bd.st.count, ("(n = " :+ strofreal(input_bd.oi.freqs[i,1], "%12.0gc") :+ ")"))
-              }
-
-              if(input_bd.opt.ovo_total == 1)
-              {
-                line = line, J(1, input_bd.st.count, ("(n = " :+ strofreal(sum(input_bd.oi.freqs), "%12.0gc") :+ ")"))
-              }
-
-              if(input_bd.opt.pval_show > 0)
-              {
-                line = line, J(1, p_count, "")
-              }
-
-              table = table \ line
-              breaks = breaks \ breaks[rows(breaks),.]
-              header_row = header_row + 1
-
-            /* Stats */
-
-              line = J(1, input_bd.oi.count + input_bd.opt.ovo_total, input_bd.st.name_long)
-
-              if(input_bd.opt.pval_show > 0) line = line, "Overall"
-
-              if(input_bd.opt.pval_show == 2)
-              {
-                for(i=1; i<=input_bd.oi.count; i++)
-                {
-                  for(j=i+1; j<=input_bd.oi.count; j++)
-                  {
-                    line = line, (input_bd.oi.name_select[i,1] :+ char(10) :+ " vs " :+ char(10) :+ input_bd.oi.name_select[j,1])
-                  }
-                }
-              }
-
-              table = table \ line
-          }
-
-        /* Style */
-
-          col = 2
-          B.put_string(start_row, col, table)
-
-          /* Merging (2) */
-
-            for(i=1; i<rows(table); i++)
-            {
-              lvls = uniqrows(breaks[i,.]')
-
-              for(j=1; j<=rows(lvls); j++)
-              {
-                vec_index = vectorIndex(selectindex(breaks[i,.] :== lvls[j,1])) :+ 1
-
-                for(k=1; k<=rows(vec_index); k++)
-                {
-                  row = start_row + (i-1)
-                  col_1 = vec_index[k,1]
-                  col_2 = vec_index[k,2]
-
-                  B.set_sheet_merge(sheet, (row, row), (col_1, col_2))
-                }
-              }
-            }
-
-
-
-          /* Setting Formats */
-
-            B.set_fmtid((start_row, header_row), start_col, fmt_first_square)
-
-            B.set_fmtid((start_row, header_row), (start_col + 1, p_col - 1), fmt_header_stats)
-
-            if(input_bd.opt.pval_show > 0)
-            {
-              B.set_fmtid((start_row, header_row), (p_col, end_col), fmt_header_pvals)
-            }
-
-          /* Height & Width */
-
-            /* Stats */
-
-              B.set_column_width(start_col + 1, p_col - 1, width + 1)
-
-            /* P-Values */
-
-              if(input_bd.opt.pval_show == 2)
-              {
-                width = max(udstrlen(input_bd.oi.name_select)) + 1
-                B.set_column_width(p_col + 1, end_col, width)
-                B.set_row_height(header_row, header_row, 45)
-              }
-
-      /* Variable Names & Formats */
-
-        row = header_row + 1
-
-        /* Values */
-
-          table        = J(1,1,"")
-          style        = J(1,2,"")
-          format_table = formats
-
-          for(i=1; i<=input_bd.vi.var_count; i++)
-          {
-            /* Series Name */
-
-              if(input_bd.vi.series_position[1,i] == 1)
-              {
-                series = input_bd.vi.display_series[1,i]
-
-                style = style \ ("main", "blank")
-                table = table \ series
-
-                if(input_bd.res[1,i].binary == 1 & input_bd.opt.dis_percent == 1)
-                {
-                  format_table = format_table \ subinstr(subinstr(formats, "fmt_stat_num", "fmt_stat_pct"), "fmt_stat_ci", "fmt_stat_ci_pct")
-                }
-                else
-                {
-                  format_table = format_table \ formats
-                }
-              }
-
-            /* Variable Name */
-
-              table = table \ input_bd.vi.display_name[1,i]
-
-              if(input_bd.vi.series_position[1,i] == .) style = style \ ("main", "")
-              else                                      style = style \ ("sub", "")
-
-              if(input_bd.res[1,i].binary == 1 & input_bd.opt.dis_percent == 1)
-              {
-                format_table = format_table \ subinstr(subinstr(formats, "fmt_stat_num", "fmt_stat_pct"), "fmt_stat_ci", "fmt_stat_ci_pct")
-              }
-              else
-              {
-                format_table = format_table \ formats
-              }
-
-            /* Separator */
-
-              if(input_bd.vi.series_position[1,i] == -1)
-              {
-                style[rows(style), 2] = "sep"
-              }
-
-              if(i != input_bd.vi.var_count)
-              {
-                if(input_bd.vi.series_position[1,i] == . & input_bd.vi.series_position[1,i+1] != .)
-                {
-                  style[rows(style), 2] = "sep"
-                }
-              }
-          }
-
-          table        = table[(2..rows(table)), .]
-          style        = style[(2..rows(style)), .]
-          format_table = format_table[(2..rows(format_table)), .]
-
-          end_row = row + rows(table) - 1
-
-          B.put_string(row, start_col, table)
-
-        /* Style */
-
-          if(sum(style[.,1] :== "main") > 0)
-          {
-            select_rows = vectorIndex(selectindex(style[.,1] :== "main")') :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.set_fmtid((select_rows[i,1], select_rows[i,2]), start_col, fmt_varname_main)
-            }
-          }
-
-          if(sum(style[.,1] :== "sub") > 0)
-          {
-            select_rows = vectorIndex(selectindex(style[.,1] :== "sub")') :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.set_fmtid((select_rows[i,1], select_rows[i,2]), start_col, fmt_varname_sub)
-            }
-          }
-
-          width = max((10 \ udstrlen(table))) + 2
-          B.set_column_width(start_col, start_col, width)
-
-      /* Statistics */
-
-        /* Placing Values */
-
-          excelResultsWide(input_bd, B, row, end_row)
-
-        /* Formatting */
-
-          /* fmt_stat_obs */
-
-            if(sum(format_table :== "fmt_stat_obs") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_obs"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_obs"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_obs = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_obs, "center")
-                B.fmtid_set_number_format(fmt_stat_obs, "#,##0")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_obs)
-                  }
-                }
-            }
-
-          /* fmt_stat_num */
-
-            if(sum(format_table :== "fmt_stat_num") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_num"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_num"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_num = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_num, "center")
-                fmt = "0" + ((input_bd.opt.dis_round > 0) * ".") + (input_bd.opt.dis_round * "0")
-                B.fmtid_set_number_format(fmt_stat_num, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_num)
-                  }
-                }
-            }
-
-          /* fmt_stat_pct */
-
-            if(sum(format_table :== "fmt_stat_pct") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_pct"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_pct"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_pct = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_pct, "center")
-                fmt = "0" + ((input_bd.opt.dis_round > 0) * ".") + (input_bd.opt.dis_round * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_pct, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_pct)
-                  }
-                }
-            }
-
-          /* fmt_stat_ci */
-
-            if(sum(format_table :== "fmt_stat_ci") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_ci"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_ci"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_ci = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_ci, "center")
-                fmt = "0" + ((input_bd.opt.ci_round > 0) * ".") + (input_bd.opt.ci_round * "0")
-                B.fmtid_set_number_format(fmt_stat_ci, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_ci)
-                  }
-                }
-            }
-
-          /* fmt_stat_cipct */
-
-            if(sum(format_table :== "fmt_stat_cipct") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_cipct"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_cipct"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_cipct = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_cipct, "center")
-                fmt = "0" + ((input_bd.opt.ci_round > 0) * ".") + (input_bd.opt.ci_round * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_cipct, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_cipct)
-                  }
-                }
-            }
-
-          /* fmt_stat_minmax */
-
-            if(sum(formats :== "fmt_stat_minmax") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_minmax"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_minmax"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_minmax = B.add_fmtid()
-
-                B.fmtid_set_horizontal_align(fmt_stat_minmax, "center")
-
-                if(sum(stats :== "min") > 0) fmt = selectindex(input_bd.st.name_short :== "min")[1,1]
-                else                         fmt = selectindex(input_bd.st.name_short :== "max")[1,1]
-
-                fmt = strtoreal(substr(input_bd.st.col_format[1,fmt], -2, 1))
-                fmt = "0" + ((fmt > 0) * ".") + (fmt * "0") + (input_bd.opt.dis_percent * "%")
-                B.fmtid_set_number_format(fmt_stat_minmax, fmt)
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_minmax)
-                  }
-                }
-            }
-
-          /* fmt_stat_str */
-
-            if(sum(formats :== "fmt_stat_str") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_str"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_str"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_str = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_str, "center")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_str)
-                  }
-                }
-            }
-
-          /* fmt_stat_pval */
-
-            if(sum(format_table :== "fmt_stat_pval") > 0)
-            {
-              rows = vectorIndex(selectindex(rowmax(format_table :== "fmt_stat_pval"))') :+ (row - 1)
-              cols = vectorIndex(selectindex(colmax(format_table :== "fmt_stat_pval"))) :+ 1
-
-              /* Creating Format */
-
-                fmt_stat_pval = B.add_fmtid()
-                B.fmtid_set_horizontal_align(fmt_stat_pval, "center")
-                B.fmtid_set_number_format(fmt_stat_pval, "0.0000")
-
-              /* Setting Format */
-
-                for(i=1; i<=rows(rows); i++)
-                {
-                  for(j=1; j<=rows(cols); j++)
-                  {
-                    B.set_fmtid((rows[i,1], rows[i,2]), (cols[j,1], cols[j,2]), fmt_stat_pval)
-                  }
-                }
-            }
-
-      /* Footer */
-
-        table = J(0,0,"")
-
-        if(inlist("mean", input_bd.st.name_short) & cols(input_bd.opt.pval_stars) > 0)
-        {
-          for(i=1; i<=cols(input_bd.opt.pval_stars); i++)
-          {
-            line = i * uchar(735) + ((cols(input_bd.opt.pval_stars) - i + 1) * " ")
-            line = line + "p(overall) < 0" + strofreal(revorder(input_bd.opt.pval_stars)[1,i])
-
-            if(cols(table) == 0) table = line
-            else                 table = table \ line
-          }
-        }
-
-        if(inlist("ci", input_bd.st.name_short) & input_bd.opt.pval_scripts != .)
-        {
-          line = input_bd.code_list[1,(1..input_bd.oi.count)]'
-          line = line :+ `" sig. diff. from ""' :+ input_bd.oi.name_select :+ `"" (p < 0"' :+ strofreal(input_bd.opt.pval_scripts) :+ ")"
-
-          if(cols(table) == 0) table = line
-          else                 table = table \ line
-        }
-
-        if(cols(table) > 0)
-        {
-          B.put_string(end_row + 1, start_col, table)
-        }
-
-      /* Styles (2) */
-
-        /* Blank Cells */
-
-          if(sum(style[.,2] :== "blank") > 0)
-          {
-            select_rows = selectindex(style[.,2] :== "blank") :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.put_string(select_rows[i,1], start_col + 1, J(1, end_col - start_col, ""))
-            }
-          }
-
-        /* Separator */
-
-          if(sum(style[.,2] :== "sep") > 0)
-          {
-            select_rows = selectindex(style[.,2] :== "sep") :+ (row - 1)
-
-            for(i=1; i<=rows(select_rows); i++)
-            {
-              B.set_bottom_border((select_rows[i,1], select_rows[i,1]), (start_col, end_col), "thin")
-            }
-          }
-
-        /* Stat Borders */
-
-          for(i=2; i<=group_count; i++)
-          {
-            col = 2 + ((i-1) * input_bd.st.count)
-            B.set_left_border((start_row, end_row), col, "medium")
-          }
-
-        /* Overall Borders */
-
-          B.set_top_border((start_row, start_row), (start_col, end_col), "medium")
-          B.set_bottom_border((header_row - 1, header_row - 1), (start_col + 1, end_col), "thin")
-          B.set_bottom_border((header_row, header_row), (start_col, end_col), "medium")
-          B.set_bottom_border((end_row, end_row), (start_col, end_col), "medium")
-
-          B.set_right_border((start_row, end_row), (end_col, end_col), "medium")
-
-          if(input_bd.opt.pval_show > 0)
-          {
-            B.set_left_border((start_row, end_row), (p_col, p_col), "medium")
-          }
-    }
-
-  /* excelResultsWide() */
-
-    void excelResultsWide(struct braddev scalar input_bd,
-                          class  xl      scalar B,
-                          real           scalar start_row,
-                          real           scalar end_row)
-    {
-      /* Getting Type */
-
-        stat_types = (input_bd.st.name_short :!= "ci") :* "numeric"
-
-        if(cols(input_bd.opt.pval_stars) > 0 & inlist("mean", input_bd.st.name_short))
-        {
-          stat_types[1,selectindex(input_bd.st.name_short :== "mean")[1,1]] = ""
-        }
-
-        string_pos = selectindex(stat_types :== "")
-
-        for(i=1; i<=cols(string_pos); i++)
-        {
-          stat_types[1,string_pos[1,i]] = "string"
-        }
-
-      /* Creating Numeric Table */
-
-        group_count = input_bd.oi.count + input_bd.opt.ovo_total
-        p_count     = (input_bd.opt.pval_show > 0) + ((input_bd.opt.pval_show == 2) * (factorial(input_bd.oi.count)/(factorial(2) * factorial(input_bd.oi.count-2))))
-
-        rows = group_count
-        cols = input_bd.st.count
-
-        full_table = J(0,0,.)
-
-        for(i=1; i<=cols(input_bd.res); i++)
-        {
-          if(input_bd.res[1,i].series_position == 1)
-          {
-            if(i == 1) full_table = J(1, (group_count * input_bd.st.count) + p_count, .)
-            else       full_table = full_table \ J(1, (group_count * input_bd.st.count) + p_count, .)
-          }
-
-          table = J(rows, cols, .)
-
-          /* Stats */
-
-            for(j=1; j<=input_bd.st.count; j++)
-            {
-              if(stat_types[1,j] == "string") continue
-
-              /* Getting Stat */
-
-                if(input_bd.st.name_short[1,j] == "obs")  values = input_bd.res[1,i].vals_obs
-                if(input_bd.st.name_short[1,j] == "nyes") values = input_bd.res[1,i].vals_nyes
-                if(input_bd.st.name_short[1,j] == "mean") values = input_bd.res[1,i].vals_mean
-                if(input_bd.st.name_short[1,j] == "se")   values = input_bd.res[1,i].vals_se
-                if(input_bd.st.name_short[1,j] == "lci")  values = input_bd.res[1,i].vals_ci[.,1]
-                if(input_bd.st.name_short[1,j] == "uci")  values = input_bd.res[1,i].vals_ci[.,2]
-                if(input_bd.st.name_short[1,j] == "sd")   values = input_bd.res[1,i].vals_sd
-                if(input_bd.st.name_short[1,j] == "var")  values = input_bd.res[1,i].vals_var
-                if(input_bd.st.name_short[1,j] == "min")  values = input_bd.res[1,i].vals_minmax[.,1]
-                if(input_bd.st.name_short[1,j] == "max")  values = input_bd.res[1,i].vals_minmax[.,2]
-
-              /* Adding to Table */
-
-                table[.,j] = values
-            }
-
-            table = rowshape(table, 1)
-
-          /* P-Values */
-
-            if(input_bd.opt.pval_show > 0)
-            {
-              if(nonmissing(input_bd.res[1,i].vals_povr) == 0)
-              {
-                table = table, .
-              }
-              else
-              {
-                values = select(input_bd.res[1,i].vals_povr, (input_bd.res[1,i].vals_povr :!= .))[1,1]
-                table = table, values
-              }
-            }
-
-            if(input_bd.opt.pval_show == 2)
-            {
-              values = input_bd.res[1,i].vals_pind
-
-              values = vech(values[(2..rows(values)-input_bd.opt.ovo_total),(1..(cols(values)-1))])'
-
-              table = table, values
-            }
-
-          /* Adding to Full Table */
-
-            if(cols(full_table) == 0) full_table = table
-            else                      full_table = full_table \ table
-        }
-
-        B.put_number(start_row, 2, full_table)
-
-      /* Creating String Table */
-
-        full_table = J(0,0,"")
-
-        if(cols(string_pos) > 0)
-        {
-          for(i=1; i<=cols(input_bd.res); i++)
-          {
-            if(input_bd.res[1,i].series_position == 1)
-            {
-              if(i == 1) full_table = J(1, (group_count * input_bd.st.count), "")
-              else       full_table = full_table \ J(1, (group_count * input_bd.st.count), "")
-            }
-
-            table = J(rows, cols, "")
-
-            /* Stats */
-
-              for(j=1; j<=input_bd.st.count; j++)
-              {
-                if(stat_types[1,j] != "string") continue
-
-                /* Getting Stat */
-
-                  if(input_bd.st.name_short[1,j] == "mean") values = input_bd.res[1,i].vals_mean
-                  if(input_bd.st.name_short[1,j] == "ci")   values = input_bd.res[1,i].vals_ci
-
-                /* Specific (Mean) */
-
-                  if(input_bd.st.name_short[1,j] == "mean" & cols(input_bd.opt.pval_stars) > 0)
-                  {
-                    if(input_bd.res[1,i].binary & input_bd.opt.dis_percent)
-                    {
-                      values = values :* 100
-                    }
-
-                    values = strofreal(values, input_bd.st.col_format[1,j])
-
-                    if(input_bd.res[1,i].binary & input_bd.opt.dis_percent)
-                    {
-                      values = values :+ ((values :!= ".") :* "%")
-                    }
-
-                    values = ((values :!= ".") :* values) :+ ((values :== ".") :* "-")
-
-                    values = values :+ input_bd.res[1,i].ps_stars
-                  }
-
-                /* Specific (CI) */
-
-                  if(input_bd.st.name_short[1,j] == "ci")
-                  {
-                    if(input_bd.res[1,i].binary & input_bd.opt.dis_percent)
-                    {
-                      values = values :* 100
-                    }
-                    values = strofreal(values, input_bd.st.col_format[1,j])
-
-                    if(input_bd.res[1,i].binary & input_bd.opt.dis_percent)
-                    {
-                      values = values :+ ((values :!= ".") :* "%")
-                    }
-
-                    values = (values[.,1] :!= ".") :* (substr(input_bd.opt.ci_notation,1,1) :+ values[.,1] :+ input_bd.opt.ci_separator :+ values[.,2] :+ substr(input_bd.opt.ci_notation,2,1))
-                    values = values :+ ((values :== "") :* "-")
-
-                    if(input_bd.opt.pval_scripts != .) values = values :+ input_bd.res[1,i].ps_scripts
-                  }
-
-                /* Adding to Table */
-
-                  table[.,j] = values
-              }
-
-            table = rowshape(table, 1)
-
-            /* Adding to Full Table */
-
-              if(cols(full_table) == 0) full_table = table
-              else                      full_table = full_table \ table
-          }
-
-          vec_index = vectorIndex(selectindex(J(1, group_count, stat_types) :== "string"))
-
-          for(i=1; i<=rows(vec_index); i++)
-          {
-            B.put_string(start_row, 1 + vec_index[i,1], full_table[.,(vec_index[i,1]..vec_index[i,2])])
-          }
-        }
-    }
-
-  end
-
-**======================================================================**
-**   Mata Functions - general                                           **
-**======================================================================**;
-
-  #delimit cr
-
-  mata:
-
-  /* commonString() */
-
-    string scalar commonString(string rowvector input_strings)
-    {
-      /* Longest String */
-
-        longest = udstrlen(input_strings)
-        maxindex(longest, 1, start, range)
-
-        longest = input_strings[1,start[1,1]]
-
-      /* Prefix */
-
-        prefix = 0
-        for(i=udstrlen(longest); i>=1; i--)
-        {
-          if(allof(substr(input_strings, 1, i), substr(longest, 1, i)))
-          {
-            prefix = i
-            break
-          }
-        }
-
-      /* Suffix */
-
-        suffix = 0
-        for(i=udstrlen(longest); i>=1; i--)
-        {
-          if(allof(substr(strreverse(input_strings), 1, i), substr(strreverse(longest), 1, i)))
-          {
-            suffix = i
-            break
-          }
-        }
-
-      /* Setting Name */
-
-        if(prefix == 0 & suffix == 0)
-        {
-          return(invtokens(input_strings, ","))
-        }
-
-        series = ""
-        if(prefix > 0) series = series + substr(longest, 1, prefix)
-        series = series + "*"
-        if(suffix > 0) series = series + strreverse(substr(strreverse(longest), 1, suffix))
-
-      return(series)
-    }
-
-  /* inlist() */
-
-    real rowvector inlist(transmorphic rowvector needle,
-                          transmorphic matrix    haystack)
-    {
-      values = J(1, cols(needle), .)
-
-      for(i=1; i<=cols(needle); i++)
-      {
-        values[1,i] = max(haystack :== needle[1,i])
-      }
-
-      return(values)
-    }
-
-  /* vectorIndex() */
-
-    real matrix vectorIndex(real matrix input_vec)
-    {
-      real matrix vec_index
-
-      vec_index = input_vec[1,1], input_vec[1,1]
-
-      pos = 1
-      for(i=2; i<=cols(input_vec); i++)
-      {
-        if(input_vec[1,i] == input_vec[1,i-1] + 1) { vec_index[pos,2] = input_vec[1,i]; }
-        else                                       { vec_index = vec_index \ (input_vec[1,i], input_vec[1,i]); pos = pos + 1; }
-      }
-
-      return(vec_index)
-    }
-
-  /* getTitle() */
-
-    string scalar getTitle(struct braddev scalar input_bd)
-    {
-      title = ""
-
-      /* None */
-
-        if(input_bd.opt.dis_title == "none")
-        {
-          return(title)
-        }
-
-      /* Pre-selected Title */
-
-        if(input_bd.opt.dis_title != "")
-        {
-          title = input_bd.opt.dis_title
-          return(title)
-        }
-
-      /* 1 Variable */
-
-        if(input_bd.vi.var_count == 1)
-        {
-          title = input_bd.vi.name_original[1,1] + " - " + st_varlabel(input_bd.vi.name_original[1,1])
-          return(title)
-        }
-
-      /* 1 Series (XI or Series) */
-
-        if(input_bd.vi.series_count == 1)
-        {
-          title = input_bd.vi.series_name[1,1] + " - " + input_bd.vi.display_series[1,1]
-          return(title)
-        }
-
-      /* Multiple Series */
-
-        st_local("series_list", invtokens(char(34) :+ input_bd.vi.series_name :+ char(34)))
-        stata("local series_list : list uniq series_list")
-
-        title = invtokens(tokens(st_local("series_list")), ", ")
-
-      return(title)
-    }
-
-  /* tableColumns() */
-
-    real matrix tableColumns(real scalar name_width,
-                             real scalar linesize,
-                             real matrix columns)
-    {
-      table_list = 1, .
-      table_size = name_width + columns[1,1]
-
-      row = 1
-      for(i=2; i<=cols(columns); i++)
-      {
-        if((table_size + columns[1,i]) >= linesize)
-        {
-          table_list = table_list \ (i,.)
-          table_size = name_width + columns[1,i]
-          row = row + 1
+          excelTableWide(bd, B, row)
         }
         else
         {
-          table_list[row,2] = i
-          table_size        = table_size + columns[1,i]
+          if(rows(bd.oi.levels) > 0) excelTableLongOver(bd, B, row)
+          else                       excelTableLongNoOver(bd, B, row)
         }
-      }
 
-      if(table_list[rows(table_list),2] == .)
-      {
-        table_list[rows(table_list),2] = cols(columns)
-      }
 
-      table_list = table_list :+ 1
-
-      return(table_list)
+      B.close_book()
     }
 
-  end
+  /* function : excelTableWide() */
+
+    void excelTableWide(struct braddev scalar bd,
+                        class  xl      scalar B,
+                        real           scalar input_row)
+    {
+      /* Initializing P-Values */
+
+        pvalues = 0
+
+        if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+        {
+          pvalues = pvalues + 1
+        }
+
+        if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+        {
+          pvalues = pvalues + factorial(rows(bd.oi.levels))/(2 * factorial(rows(bd.oi.levels) - 2))
+        }
+
+      /* Creating Formats */
+
+        B.set_missing(".")
+
+        /* Font */
+
+          font = B.add_fontid()
+          B.fontid_set_font(font, bd.opt.excel.font_face, bd.opt.excel.font_size)
+
+          font_bold = B.add_fontid()
+          B.fontid_set_font(font_bold, bd.opt.excel.font_face, bd.opt.excel.font_size)
+          B.fontid_set_font_bold(font_bold, "on")
+
+        /* Stats - Text */
+
+          txt_stats_c = txt_stats_i = J(rows(bd.si.label), 1, "")
+
+          for(i=1; i<=rows(bd.si.label); i++)
+          {
+            /* Continuous */
+
+              fmt = bd.si.comma[i] ? "#,##0" : "0"
+
+              if(bd.si.roundc[i] > 0) fmt = fmt + "." + ("0" * bd.si.roundc[i])
+
+              if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & bd.si.stars[i]) fmt = "text"
+
+              if(!allof(bd.si.notation[i,.], "")) fmt = "text"
+
+              txt_stats_c[i] = fmt
+
+            /* Binary */
+
+              fmt = bd.si.comma[i] ? "#,##0" : "0"
+
+              if(bd.si.roundi[i] > 0) fmt = fmt + "." + ("0" * bd.si.roundi[i])
+              if(bd.si.percent[i])    fmt = fmt + "%"
+
+              if(bd.opt.test.individual & bd.opt.test.scripts != . & bd.si.scripts[i]) fmt = "text"
+
+              if(!allof(bd.si.notation[i,.], "")) fmt = "text"
+
+              txt_stats_i[i] = fmt
+          }
+
+        /* Stats - Format ID */
+
+          /* Continuous */
+
+            fmt_stats_c = J(rows(bd.si.label), 1, .)
+
+            for(i=1; i<=rows(bd.si.label); i++)
+            {
+              fmt_stats_c[i] = B.add_fmtid()
+              B.fmtid_set_fontid(fmt_stats_c[i], font)
+              B.fmtid_set_vertical_align(fmt_stats_c[i], "center")
+              B.fmtid_set_horizontal_align(fmt_stats_c[i], "center")
+              B.fmtid_set_number_format(fmt_stats_c[i], txt_stats_c[i])
+            }
+
+          /* Binary */
+
+            fmt_stats_i = J(rows(bd.si.label), 1, .)
+
+            for(i=1; i<=rows(bd.si.label); i++)
+            {
+              positions = selectindex(txt_stats_c :== txt_stats_i[i])
+              if(rows(positions) > 0 & cols(positions) > 0)
+              {
+                fmt_stats_i[i] = fmt_stats_c[positions[1]]
+                continue
+              }
+
+              fmt_stats_i[i] = B.add_fmtid()
+              B.fmtid_set_fontid(fmt_stats_i[i], font)
+              B.fmtid_set_vertical_align(fmt_stats_i[i], "center")
+              B.fmtid_set_horizontal_align(fmt_stats_i[i], "center")
+              B.fmtid_set_number_format(fmt_stats_i[i], txt_stats_i[i])
+            }
+
+        /* P-Values */
+
+          fmt_pvalue = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_pvalue, font)
+          B.fmtid_set_horizontal_align(fmt_pvalue, "center")
+
+        /* Title */
+
+          fmt_title = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_title, font_bold)
+
+        /* Whitespace */
+
+          fmt_whitespace = B.add_fmtid()
+          B.fmtid_set_left_border(fmt_whitespace, "medium")
+          B.fmtid_set_right_border(fmt_whitespace, "medium")
+          B.fmtid_set_fill_pattern(fmt_whitespace, "solid", "white")
+
+        /* Header - Stats */
+
+          fmt_header = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_header, font_bold)
+          B.fmtid_set_horizontal_align(fmt_header, "center")
+          B.fmtid_set_fill_pattern(fmt_header, "solid", bd.opt.excel.color[1])
+
+        /* Variables */
+
+          fmt_question = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_question, font_bold)
+          B.fmtid_set_horizontal_align(fmt_question, "left")
+          B.fmtid_set_left_border(fmt_question, "medium")
+          B.fmtid_set_right_border(fmt_question, "medium")
+          B.fmtid_set_fill_pattern(fmt_question, "solid", bd.opt.excel.color[2])
+
+          fmt_answer = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_answer, font_bold)
+          B.fmtid_set_horizontal_align(fmt_answer, "right")
+          B.fmtid_set_left_border(fmt_answer, "medium")
+          B.fmtid_set_right_border(fmt_answer, "medium")
+          B.fmtid_set_fill_pattern(fmt_answer, "solid", bd.opt.excel.color[2])
+
+      /* Creating Header */
+
+        groups = rows(bd.oi.levels) + bd.opt.over.total
+
+        row = 2 + bd.opt.over.group_n
+        col = (groups * rows(bd.si.label)) + (pvalues * (1 + bd.opt.test.statistic))
+
+        header = J(row, col, "")
+
+        /* Stat Columns */
+
+          pos1 = 1
+          pos2 = groups * rows(bd.si.label)
+
+          /* Bottom Row */
+
+            header[row,(pos1..pos2)] = rowshape(J(1, groups, bd.si.label'), 1)
+
+          /* Middle Row */
+
+            if(bd.opt.over.group_n)
+            {
+              values = bd.oi.freqs
+
+              if(bd.opt.over.total) values = values \ sum(values)
+
+              strings = "(n = " :+ strtrim(strofreal(values, "%32.0fc")) :+ ")"
+
+              header[(row-1),(pos1..pos2)] = rowshape(J(1, rows(bd.si.name), strings), 1)
+            }
+
+          /* Top Row */
+
+            strings = bd.oi.labels
+
+            if(bd.opt.over.total) strings = strings \ "Total"
+
+            header[1,(pos1..pos2)] = rowshape(J(1, rows(bd.si.name), strings), 1)
+
+        /* P-Value Columns */
+
+          pos1 = pos2 + 1
+          pos2 = cols(header)
+
+          /* Bottom Row */
+
+            if(pvalues > 0)
+            {
+              if(bd.opt.test.statistic) header[row,(pos1..pos2)] = J(1, pvalues, ("Stat", "P-Value"))
+              else                      header[row,(pos1..pos2)] = J(1, pvalues, "P-Value")
+            }
+
+          /* Middle & Top Row */
+
+            if(pvalues > 0)
+            {
+              pos2 = pos1 + bd.opt.test.statistic
+
+              if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+              {
+                header[(row-1),(pos1..pos2)] = J(1, (1 + bd.opt.test.statistic), "Overall")
+
+                pos1 = pos2 + 1
+                pos2 = pos1 + bd.opt.test.statistic
+              }
+
+              if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+              {
+                for(i=1; i<=rows(bd.oi.labels); i++)
+                {
+                  for(j=i+1; j<=rows(bd.oi.labels); j++)
+                  {
+                    header[(row-1),(pos1..pos2)] = J(1, (1 + bd.opt.test.statistic), (char(34) :+ bd.oi.labels[i] :+ char(34) :+ " vs " :+ char(34) :+ bd.oi.labels[j] :+ char(34)))
+
+                    pos1 = pos2 + 1
+                    pos2 = pos1 + bd.opt.test.statistic
+                  }
+                }
+              }
+            }
+
+      /* Initializing Table */
+
+        row = input_row
+        col = 1
+
+        start_row = row
+
+        end_col = 1 + cols(header)
+
+      /* Table - Title */
+
+        title = getTitle(bd.vi)
+
+        if(title != "")
+        {
+          B.put_string(row, col, title)
+          B.set_fmtid(row, col, fmt_title)
+
+          row = row + 1
+          start_row = row
+        }
+
+      /* Table - Header */
+
+        B.put_string(row, (col+1), header)
+
+        sheet = B.query("sheetname")
+
+        /* Merging Groups - Stats */
+
+          for(i=1; i<=groups; i++)
+          {
+            pos1 = 2 + ((i - 1) * rows(bd.si.label))
+            pos2 = pos1 + rows(bd.si.label) - 1
+
+            B.set_sheet_merge(sheet, (row,row), (pos1,pos2))
+            if(rows(header) == 3) B.set_sheet_merge(sheet, (row+1,row+1), (pos1,pos2))
+          }
+
+        /* Formatting - Stats */
+
+          B.set_fmtid((row,(row+rows(header)-1)), (2,end_col), fmt_header)
+
+        /* Merging Groups - P-Values */
+
+          if(pvalues > 0 & bd.opt.test.statistic)
+          {
+            pos1 = 2 + (groups * rows(bd.si.label))
+
+            for(i=1; i<=pvalues; i++)
+            {
+              pos2 = pos1 + 1
+
+              B.set_sheet_merge(sheet, (row,row), (pos1,pos2))
+              if(rows(header) == 3) B.set_sheet_merge(sheet, (row+1,row+1), (pos1,pos2))
+
+              pos1 = pos2 + 1
+            }
+          }
+
+        /* Formatting - Whitespace */
+
+          pos1 = start_row
+          pos2 = start_row + rows(header) - 1
+
+          B.set_fmtid((pos1,pos2), 1, fmt_whitespace)
+
+        row = start_row + rows(header)
+
+      /* Table - Contents */
+
+        for(i=1; i<=rows(bd.vi); i++)
+        {
+          col = 1
+
+          /* Names */
+
+            if(bd.vi[i].type == "individual")
+            {
+              B.put_string(row, col, bd.vi[i].varlist)
+              B.set_fmtid(row, col, fmt_question)
+            }
+            else
+            {
+              B.put_string(row, col, bd.vi[i].question)
+              B.set_fmtid(row, col, fmt_question)
+
+              row = row + 1
+
+              pos1 = row
+              pos2 = row + rows(bd.vi[i].answers) - 1
+
+              B.put_string(row, col, bd.vi[i].answers)
+              B.set_fmtid((pos1,pos2), col, fmt_answer)
+            }
+
+          /* Statistics */
+
+            end_row = row + rows(bd.vi[i].answers) - 1
+
+            for(j=1; j<=rows(bd.si.label); j++)
+            {
+              col = col + 1
+
+              /* Numeric */
+
+                if(bd.si.name[j] != "ci" & ((bd.vi[i].binary & txt_stats_i[j] != "text") | (!bd.vi[i].binary & txt_stats_c[j] != "text")))
+                {
+                  if(bd.si.name[j] == "obs")  values = bd.vi[i].results.obs
+                  if(bd.si.name[j] == "nyes") values = bd.vi[i].results.nyes
+                  if(bd.si.name[j] == "mean") values = bd.vi[i].results.mean
+                  if(bd.si.name[j] == "se")   values = bd.vi[i].results.se
+                  if(bd.si.name[j] == "sd")   values = bd.vi[i].results.sd
+                  if(bd.si.name[j] == "var")  values = bd.vi[i].results.var
+                  if(bd.si.name[j] == "lci")  values = bd.vi[i].results.lci
+                  if(bd.si.name[j] == "uci")  values = bd.vi[i].results.uci
+                  if(bd.si.name[j] == "min")  values = bd.vi[i].results.min
+                  if(bd.si.name[j] == "max")  values = bd.vi[i].results.max
+
+                  for(k=1; k<=groups; k++)
+                  {
+                    pos1 = col + ((k - 1) * rows(bd.si.label))
+
+                    B.put_number(row, pos1, values[.,k])
+
+                    if(bd.vi[i].binary) B.set_fmtid((row,end_row), pos1, fmt_stats_i[j])
+                    else                B.set_fmtid((row,end_row), pos1, fmt_stats_c[j])
+                  }
+
+                  continue
+                }
+
+              /* Text */
+
+                if(bd.si.name[j] != "ci")
+                {
+                  if(bd.si.name[j] == "obs")  values = bd.vi[i].results.obs
+                  if(bd.si.name[j] == "nyes") values = bd.vi[i].results.nyes
+                  if(bd.si.name[j] == "mean") values = bd.vi[i].results.mean
+                  if(bd.si.name[j] == "se")   values = bd.vi[i].results.se
+                  if(bd.si.name[j] == "sd")   values = bd.vi[i].results.sd
+                  if(bd.si.name[j] == "var")  values = bd.vi[i].results.var
+                  if(bd.si.name[j] == "lci")  values = bd.vi[i].results.lci
+                  if(bd.si.name[j] == "uci")  values = bd.vi[i].results.uci
+                  if(bd.si.name[j] == "min")  values = bd.vi[i].results.min
+                  if(bd.si.name[j] == "max")  values = bd.vi[i].results.max
+
+                  if(bd.vi[i].binary & bd.si.percent[j]) values = values :* 100
+
+                  format = "%32." + (bd.vi[i].binary ? strofreal(bd.si.roundi[j]) : strofreal(bd.si.roundc[j])) + "f" + (bd.si.comma[j] * "c")
+
+                  strings = strofreal(values, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")
+                }
+                else
+                {
+                  values1 = bd.vi[i].results.lci
+                  values2 = bd.vi[i].results.uci
+
+                  if(bd.vi[i].binary & bd.si.percent[j])
+                  {
+                    values1 = values1 :* 100
+                    values2 = values2 :* 100
+                  }
+
+                  format = "%32." + (bd.vi[i].binary ? strofreal(bd.si.roundi[j]) : strofreal(bd.si.roundc[j])) + "f" + (bd.si.comma[j] * "c")
+
+                  strings = (strofreal(values1, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")) :+ bd.si.ci_separator :+ (strofreal(values2, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%"))
+                  values  = values1
+                }
+
+                if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & bd.si.stars[j])
+                {
+                  postscripts = J(rows(bd.vi[i].varlist), 1, "")
+                  for(k=1; k<=cols(bd.opt.test.stars); k++)
+                  {
+                    postscripts = postscripts :+ ((bd.vi[i].results.ovr_pvalue :< bd.opt.test.stars[k]) :* uchar(735))
+                  }
+                  strings = strings :+ postscripts
+                }
+
+                if(bd.opt.test.individual & bd.opt.test.scripts != . & bd.si.scripts[j])
+                {
+                  postscripts = J(rows(bd.vi[i].varlist), rows(bd.oi.levels), "")
+                  for(k=1; k<=rows(bd.oi.levels); k++)
+                  {
+                    positions = range(k, k + ((rows(bd.oi.levels) - 1) * rows(bd.oi.levels)), rows(bd.oi.levels))
+                    postscripts = postscripts :+ ((bd.vi[i].results.ind_pvalue[.,positions] :< bd.opt.test.scripts) :* uchar(bd.opt.test.letters[k]))
+                  }
+                  strings[.,(1..rows(bd.oi.levels))] = strings[.,(1..rows(bd.oi.levels))] :+ postscripts
+                }
+
+                strings = bd.si.notation[j,1] :+ strings :+ bd.si.notation[j,2]
+                strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                for(k=1; k<=groups; k++)
+                {
+                  pos1 = col + ((k - 1) * rows(bd.si.name))
+
+                  B.put_string(row, pos1, strings[.,k])
+
+                  if(bd.vi[i].binary) B.set_fmtid((row,end_row), pos1, fmt_stats_i[j])
+                  else                B.set_fmtid((row,end_row), pos1, fmt_stats_c[j])
+                }
+            }
+
+          /* P-Values - Overall */
+
+            col = 2 + (rows(bd.si.label) * groups)
+
+            if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+            {
+              if(bd.opt.test.statistic)
+              {
+                if(bd.opt.test.t_overall)                           strings = "t = "
+                else                                                strings = "F = "
+                if(bd.vi[i].type == "xi" & bd.opt.test.chi_overall) strings = "Chi2 = "
+
+                values  = bd.vi[i].results.ovr_statistic
+                strings = strings :+ strtrim(strofreal(values, "%32.2f"))
+                strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                B.put_string(row, col, strings)
+                B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+                col = col + 1
+              }
+
+              values  = bd.vi[i].results.ovr_pvalue
+              strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
+
+              pos1 = selectindex(values :>= 0.01)
+              if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+
+              pos1 = selectindex(values :< 0.001)
+              if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+
+              strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+              B.put_string(row, col, strings)
+              B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+              col = col + 1
+            }
+
+          /* P-Values - Individual */
+
+            if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+            {
+              for(j=1; j<=rows(bd.oi.levels); j++)
+              {
+                for(k=j+1; k<=rows(bd.oi.levels); k++)
+                {
+                  pos2 = (j + ((j-1) * rows(bd.oi.levels))) + (k - j)
+
+                  if(bd.opt.test.statistic)
+                  {
+                    if(bd.opt.test.t_individual) strings = "t = "
+                    else                         strings = "F = "
+
+                    values  = bd.vi[i].results.ind_statistic[.,pos2]
+                    strings = strings :+ strtrim(strofreal(values, "%32.2f"))
+                    strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                    B.put_string(row, col, strings)
+                    B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+                    col = col + 1
+                  }
+
+                  values  = bd.vi[i].results.ind_pvalue[.,pos2]
+                  strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
+
+                  pos1 = selectindex(values :>= 0.01)
+                  if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+
+                  pos1 = selectindex(values :< 0.001)
+                  if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+
+                  strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                  B.put_string(row, col, strings)
+                  B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+                  col = col + 1
+                }
+              }
+            }
+
+          /* Setting Bottom Border */
+
+            if(i < rows(bd.vi))
+            {
+              B.set_bottom_border(end_row, (1,end_col), "thin")
+            }
+
+          row = end_row + 1
+        }
+
+      /* Formatting - Stats & P-Values */
+
+        /* Stats */
+
+          for(i=1; i<=groups; i++)
+          {
+            pos1 = 1 + (i * rows(bd.si.label))
+
+            B.set_right_border((start_row,end_row), pos1, "thin")
+          }
+
+        /* P-Values */
+
+          if(pvalues > 0 & bd.opt.test.statistic)
+          {
+            pos1 = 1 + (groups * rows(bd.si.label))
+
+            for(i=1; i<=pvalues; i++)
+            {
+              pos1 = pos1 + 2
+
+              B.set_right_border((start_row,end_row), pos1, "thin")
+            }
+          }
+
+      /* Formatting - Borders */
+
+        pos1 = 1
+        pos2 = 1 + cols(header)
+
+        /* Header */
+
+          row = start_row + rows(header)
+
+          B.set_top_border(row, (pos1,pos2), "medium")
+
+        /* Overall Table */
+
+          B.set_top_border(start_row, (pos1,pos2), "medium")
+          B.set_bottom_border(end_row, (pos1,pos2), "medium")
+
+          B.set_right_border((start_row,end_row), pos2, "medium")
+
+      /* Footer */
+
+        row = end_row + 1
+
+        if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars) & bd.opt.test.footer)
+        {
+          spaces = " " :* (cols(bd.opt.test.stars) :- (range(1, cols(bd.opt.test.stars), 1)))
+
+          legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
+          legend = legend :+ spaces :+ " p(overall) < 0" :+ strofreal(bd.opt.test.stars)'
+
+          B.put_string(row, 1, legend)
+
+          row = row + rows(legend)
+        }
+
+        if(bd.opt.test.individual & bd.opt.test.scripts != . & any(bd.si.scripts) & bd.opt.test.footer)
+        {
+          legend = uchar(bd.opt.test.letters[1..rows(bd.oi.levels)])' :+ " sig. diff. from " :+ char(34) :+ bd.oi.labels :+ char(34) :+ " (p < 0" :+ strofreal(bd.opt.test.scripts) :+ ")"
+
+          B.put_string(row, 1, legend)
+        }
+    }
+
+  /* function : excelTableLongOver() */
+
+    void excelTableLongOver(struct braddev scalar bd,
+                            class  xl      scalar B,
+                            real           scalar input_row)
+    {
+      /* Initializing P-Values */
+
+        pvalues = 0
+
+        if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+        {
+          pvalues = pvalues + 1
+        }
+
+        if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+        {
+          pvalues = pvalues + rows(bd.oi.levels)
+        }
+
+      /* Creating Formats */
+
+        B.set_missing(".")
+
+        /* Font */
+
+          font = B.add_fontid()
+          B.fontid_set_font(font, bd.opt.excel.font_face, bd.opt.excel.font_size)
+
+          font_bold = B.add_fontid()
+          B.fontid_set_font(font_bold, bd.opt.excel.font_face, bd.opt.excel.font_size)
+          B.fontid_set_font_bold(font_bold, "on")
+
+        /* Stats - Text */
+
+          txt_stats_c = txt_stats_i = J(rows(bd.si.label), 1, "")
+
+          for(i=1; i<=rows(bd.si.label); i++)
+          {
+            /* Continuous */
+
+              fmt = bd.si.comma[i] ? "#,##0" : "0"
+
+              if(bd.si.roundc[i] > 0) fmt = fmt + "." + ("0" * bd.si.roundc[i])
+
+              if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & bd.si.stars[i]) fmt = "text"
+
+              if(!allof(bd.si.notation[i,.], "")) fmt = "text"
+
+              txt_stats_c[i] = fmt
+
+            /* Binary */
+
+              fmt = bd.si.comma[i] ? "#,##0" : "0"
+
+              if(bd.si.roundi[i] > 0) fmt = fmt + "." + ("0" * bd.si.roundi[i])
+              if(bd.si.percent[i])    fmt = fmt + "%"
+
+              if(bd.opt.test.individual & bd.opt.test.scripts != . & bd.si.scripts[i]) fmt = "text"
+
+              if(!allof(bd.si.notation[i,.], "")) fmt = "text"
+
+              txt_stats_i[i] = fmt
+          }
+
+        /* Stats - Format ID */
+
+          /* Continuous */
+
+            fmt_stats_c = J(rows(bd.si.label), 1, .)
+
+            for(i=1; i<=rows(bd.si.label); i++)
+            {
+              fmt_stats_c[i] = B.add_fmtid()
+              B.fmtid_set_fontid(fmt_stats_c[i], font)
+              B.fmtid_set_vertical_align(fmt_stats_c[i], "center")
+              B.fmtid_set_horizontal_align(fmt_stats_c[i], "center")
+              B.fmtid_set_number_format(fmt_stats_c[i], txt_stats_c[i])
+            }
+
+          /* Binary */
+
+            fmt_stats_i = J(rows(bd.si.label), 1, .)
+
+            for(i=1; i<=rows(bd.si.label); i++)
+            {
+              positions = selectindex(txt_stats_c :== txt_stats_i[i])
+              if(rows(positions) > 0 & cols(positions) > 0)
+              {
+                fmt_stats_i[i] = fmt_stats_c[positions[1]]
+                continue
+              }
+
+              fmt_stats_i[i] = B.add_fmtid()
+              B.fmtid_set_fontid(fmt_stats_i[i], font)
+              B.fmtid_set_vertical_align(fmt_stats_i[i], "center")
+              B.fmtid_set_horizontal_align(fmt_stats_i[i], "center")
+              B.fmtid_set_number_format(fmt_stats_i[i], txt_stats_i[i])
+            }
+
+        /* P-Values */
+
+          fmt_pvalue = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_pvalue, font)
+          B.fmtid_set_horizontal_align(fmt_pvalue, "center")
+
+        /* Title */
+
+          fmt_title = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_title, font_bold)
+
+        /* Whitespace */
+
+          fmt_whitespace = B.add_fmtid()
+          B.fmtid_set_left_border(fmt_whitespace, "medium")
+          B.fmtid_set_right_border(fmt_whitespace, "medium")
+          B.fmtid_set_fill_pattern(fmt_whitespace, "solid", "white")
+
+        /* Header */
+
+          fmt_header = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_header, font_bold)
+          B.fmtid_set_horizontal_align(fmt_header, "center")
+          B.fmtid_set_fill_pattern(fmt_header, "solid", bd.opt.excel.color[1])
+
+        /* Variables */
+
+          fmt_question = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_question, font_bold)
+          B.fmtid_set_horizontal_align(fmt_question, "left")
+          B.fmtid_set_left_border(fmt_question, "medium")
+          B.fmtid_set_right_border(fmt_question, "medium")
+          B.fmtid_set_fill_pattern(fmt_question, "solid", bd.opt.excel.color[2])
+
+          fmt_answer = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_answer, font_bold)
+          B.fmtid_set_horizontal_align(fmt_answer, "right")
+          B.fmtid_set_left_border(fmt_answer, "medium")
+          B.fmtid_set_right_border(fmt_answer, "medium")
+          B.fmtid_set_fill_pattern(fmt_answer, "solid", bd.opt.excel.color[2])
+
+      /* Creating Header */
+
+        row = 1 + (pvalues > 0)
+        col = rows(bd.si.label) + (pvalues * (1 + bd.opt.test.statistic))
+
+        header = J(row, col, "")
+
+        /* Stat Columns */
+
+          pos1 = 1
+          pos2 = rows(bd.si.label)
+
+          header[row,(pos1..pos2)] = bd.si.label'
+
+        /* P-Value Columns */
+
+          pos1 = pos2 + 1
+          pos2 = cols(header)
+
+          /* Bottom Row */
+
+            if(pvalues > 0)
+            {
+              if(bd.opt.test.statistic) header[row,(pos1..pos2)] = J(1, pvalues, ("Stat", "P-Value"))
+              else                      header[row,(pos1..pos2)] = J(1, pvalues, "P-Value")
+            }
+
+          /* Top Row */
+
+            if(pvalues > 0)
+            {
+              pnames = J(pvalues, 1, "")
+
+              row = 1
+
+              if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+              {
+                pnames[row] = "Overall"
+
+                row = row + 1
+              }
+
+              if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+              {
+                pnames[row..rows(pnames)] = "vs " :+ char(34) :+ bd.oi.labels :+ char(34)
+              }
+
+              header[1,(pos1..pos2)] = rowshape(J(1, (1 + bd.opt.test.statistic), pnames), 1)
+            }
+
+      /* Initializing Table */
+
+        row = input_row
+        col = 1
+
+        start_row = row
+
+        end_col = 1 + cols(header)
+
+      /* Table - Title */
+
+        title = getTitle(bd.vi)
+
+        if(title != "")
+        {
+          B.put_string(row, col, title)
+          B.set_fmtid(row, col, fmt_title)
+
+          row = row + 1
+          start_row = row
+        }
+
+      /* Table - Header */
+
+        B.put_string(row, (col+1), header)
+
+        /* Merging Groups */
+
+          if(pvalues > 0 & bd.opt.test.statistic)
+          {
+            sheet = B.query("sheetname")
+
+            col = 2 + rows(bd.si.label)
+
+            for(i=1; i<=pvalues; i++)
+            {
+              B.set_sheet_merge(sheet, (row,row), (col,(col+1)))
+
+              col = col + 2
+            }
+          }
+
+        /* Formatting - Whitespace */
+
+          pos1 = start_row
+          pos2 = start_row + rows(header) - 1
+
+          B.set_fmtid((pos1,pos2), 1, fmt_whitespace)
+
+        /* Formatting - Stats */
+
+          B.set_fmtid(row, (2,end_col), fmt_header)
+          if(pvalues > 0) B.set_fmtid((row+1), (2,end_col), fmt_header)
+
+        row = start_row + rows(header)
+
+      /* Table - Contents */
+
+        over_labels = bd.oi.labels'
+        if(bd.opt.over.total) over_labels = over_labels, "Total"
+
+        for(i=1; i<=rows(bd.vi); i++)
+        {
+          col = 1
+
+          end_row = row + (rows(bd.vi[i].varlist) * (cols(over_labels) + 1)) - 1
+
+          /* Name */
+
+            B.put_string(row, col, colshape((bd.vi[i].varlist, J(rows(bd.vi[i].varlist), 1, over_labels)), 1))
+
+          /* Statistics */
+
+            for(j=1; j<=rows(bd.si.label); j++)
+            {
+              col = col + 1
+
+              /* Numeric */
+
+                if(bd.si.name[j] != "ci" & ((bd.vi[i].binary & txt_stats_i[j] != "text") | (!bd.vi[i].binary & txt_stats_c[j] != "text")))
+                {
+                  if(bd.si.name[j] == "obs")  values = bd.vi[i].results.obs
+                  if(bd.si.name[j] == "nyes") values = bd.vi[i].results.nyes
+                  if(bd.si.name[j] == "mean") values = bd.vi[i].results.mean
+                  if(bd.si.name[j] == "se")   values = bd.vi[i].results.se
+                  if(bd.si.name[j] == "sd")   values = bd.vi[i].results.sd
+                  if(bd.si.name[j] == "var")  values = bd.vi[i].results.var
+                  if(bd.si.name[j] == "lci")  values = bd.vi[i].results.lci
+                  if(bd.si.name[j] == "uci")  values = bd.vi[i].results.uci
+                  if(bd.si.name[j] == "min")  values = bd.vi[i].results.min
+                  if(bd.si.name[j] == "max")  values = bd.vi[i].results.max
+
+                  values = J(rows(values), 1, .), values
+
+                  B.put_number(row, col, colshape(values, 1))
+
+                  if(bd.vi[i].binary) B.set_fmtid((row,end_row), col, fmt_stats_i[j])
+                  else                B.set_fmtid((row,end_row), col, fmt_stats_c[j])
+
+                  continue
+                }
+
+              /* Text */
+
+                if(bd.si.name[j] != "ci")
+                {
+                  if(bd.si.name[j] == "obs")  values = bd.vi[i].results.obs
+                  if(bd.si.name[j] == "nyes") values = bd.vi[i].results.nyes
+                  if(bd.si.name[j] == "mean") values = bd.vi[i].results.mean
+                  if(bd.si.name[j] == "se")   values = bd.vi[i].results.se
+                  if(bd.si.name[j] == "sd")   values = bd.vi[i].results.sd
+                  if(bd.si.name[j] == "var")  values = bd.vi[i].results.var
+                  if(bd.si.name[j] == "lci")  values = bd.vi[i].results.lci
+                  if(bd.si.name[j] == "uci")  values = bd.vi[i].results.uci
+                  if(bd.si.name[j] == "min")  values = bd.vi[i].results.min
+                  if(bd.si.name[j] == "max")  values = bd.vi[i].results.max
+
+                  if(bd.vi[i].binary & bd.si.percent[j]) values = values :* 100
+
+                  format = "%32." + (bd.vi[i].binary ? strofreal(bd.si.roundi[j]) : strofreal(bd.si.roundc[j])) + "f" + (bd.si.comma[j] * "c")
+
+                  strings = strofreal(values, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")
+                }
+                else
+                {
+                  values1 = bd.vi[i].results.lci
+                  values2 = bd.vi[i].results.uci
+
+                  if(bd.vi[i].binary & bd.si.percent[j])
+                  {
+                    values1 = values1 :* 100
+                    values2 = values2 :* 100
+                  }
+
+                  format = "%32." + (bd.vi[i].binary ? strofreal(bd.si.roundi[j]) : strofreal(bd.si.roundc[j])) + "f" + (bd.si.comma[j] * "c")
+
+                  strings = (strofreal(values1, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")) :+ bd.si.ci_separator :+ (strofreal(values2, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%"))
+                  values  = values1
+                }
+
+                if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & bd.si.stars[j])
+                {
+                  postscripts = J(rows(bd.vi[i].varlist), 1, "")
+                  for(k=1; k<=cols(bd.opt.test.stars); k++)
+                  {
+                    postscripts = postscripts :+ ((bd.vi[i].results.ovr_pvalue :< bd.opt.test.stars[k]) :* uchar(735))
+                  }
+                  strings = strings :+ postscripts
+                }
+
+                if(bd.opt.test.individual & bd.opt.test.scripts != . & bd.si.scripts[j])
+                {
+                  postscripts = J(rows(bd.vi[i].varlist), rows(bd.oi.levels), "")
+                  for(k=1; k<=rows(bd.oi.levels); k++)
+                  {
+                    positions = range(k, k + ((rows(bd.oi.levels) - 1) * rows(bd.oi.levels)), rows(bd.oi.levels))
+                    postscripts = postscripts :+ ((bd.vi[i].results.ind_pvalue[.,positions] :< bd.opt.test.scripts) :* uchar(bd.opt.test.letters[k]))
+                  }
+                  strings[.,(1..rows(bd.oi.levels))] = strings[.,(1..rows(bd.oi.levels))] :+ postscripts
+                }
+
+                strings = bd.si.notation[j,1] :+ strings :+ bd.si.notation[j,2]
+                strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                strings = J(rows(strings), 1, ""), strings
+
+                B.put_string(row, col, colshape(strings, 1))
+
+                if(bd.vi[i].binary) B.set_fmtid((row,end_row), pos1, fmt_stats_i[j])
+                else                B.set_fmtid((row,end_row), pos1, fmt_stats_c[j])
+            }
+
+          /* P-Values - Overall */
+
+            col = col + 1
+
+            if(bd.opt.test.overall & (cols(bd.opt.test.stars) == 0 | !any(bd.si.stars) | bd.opt.test.force))
+            {
+              if(bd.opt.test.statistic)
+              {
+                if(bd.opt.test.t_overall)                           strings = "t = "
+                else                                                strings = "F = "
+                if(bd.vi[i].type == "xi" & bd.opt.test.chi_overall) strings = "Chi2 = "
+
+                values  = bd.vi[i].results.ovr_statistic
+                strings = strings :+ strtrim(strofreal(values, "%32.2f"))
+                strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+                strings = J(rows(strings), 1, ""), J(1, cols(over_labels), strings)
+
+                B.put_string(row, col, colshape(strings, 1))
+                B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+                col = col + 1
+              }
+
+              values  = bd.vi[i].results.ovr_pvalue
+              strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
+
+              pos1 = selectindex(values :>= 0.01)
+              if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+
+              pos1 = selectindex(values :< 0.001)
+              if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+
+              strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+              strings = J(rows(strings), 1, ""), J(1, cols(over_labels), strings)
+
+              B.put_string(row, col, colshape(strings, 1))
+              B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+              col = col + 1
+            }
+
+          /* P-Values - Individual */
+
+            if(bd.opt.test.individual & (bd.opt.test.scripts == . | !any(bd.si.scripts) | bd.opt.test.force))
+            {
+              for(k=1; k<=rows(bd.oi.levels); k++)
+              {
+                positions = range(k, k + ((rows(bd.oi.levels) - 1) * rows(bd.oi.levels)), rows(bd.oi.levels))
+
+                if(bd.opt.test.statistic)
+                {
+                  values = J(rows(bd.vi[i].varlist), 1, .), bd.vi[i].results.ind_statistic[.,positions]
+                  if(bd.opt.over.total) values = values, J(rows(bd.vi[i].varlist), 1, .)
+
+                  values = colshape(values, 1)
+
+                  if(bd.opt.test.t_individual) strings = "t = " :+ strtrim(strofreal(values, "%32.2f"))
+                  else                         strings = "F = " :+ strtrim(strofreal(values, "%32.2f"))
+
+                  strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                  B.put_string(row, col, strings)
+                  B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+                  col = col + 1
+                }
+
+                values = J(rows(bd.vi[i].varlist), 1, .), bd.vi[i].results.ind_pvalue[.,positions]
+                if(bd.opt.over.total) values = values, J(rows(bd.vi[i].varlist), 1, .)
+
+                values  = colshape(values, 1)
+                strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
+
+                pos1 = selectindex(values :>= 0.01)
+                if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+
+                pos1 = selectindex(values :< 0.001)
+                if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+
+                strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                B.put_string(row, col, strings)
+                B.set_fmtid((row,end_row), col, fmt_pvalue)
+
+                col = col + 1
+              }
+            }
+
+          row = end_row + 1
+        }
+
+        end_row = row - 1
+        end_col = 1 + cols(header)
+
+      /* Formatting - Results */
+
+        strings = J(1, cols(header), "")
+
+        row = start_row + rows(header)
+
+        for(i=1; i<=rows(bd.vi); i++)
+        {
+          for(j=1; j<=rows(bd.vi[i].varlist); j++)
+          {
+            /* Empty Row */
+
+              B.put_string(row, 2, strings)
+
+            /* Question */
+
+              B.set_fmtid(row, 1, fmt_question)
+
+            /* Groups */
+
+              pos1 = row + 1
+              pos2 = row + cols(over_labels)
+
+              B.set_fmtid((pos1,pos2), 1, fmt_answer)
+
+            /* Bottom Line */
+
+              row = pos2
+
+              pos1 = 1
+              pos2 = 1 + cols(header)
+
+              B.set_bottom_border(row, (pos1,pos2), "thin")
+
+            row = row + 1
+          }
+        }
+
+      /* Formatting - Borders */
+
+        pos1 = 1
+        pos2 = 1 + cols(header)
+
+        /* Header */
+
+          row = start_row + rows(header)
+
+          B.set_top_border(row, (pos1,pos2), "medium")
+
+        /* P-Values */
+
+          if(pvalues > 0)
+          {
+            col = 1 + rows(bd.si.label)
+
+            B.set_right_border((start_row,end_row), col, "thin")
+
+            if(bd.opt.test.statistic)
+            {
+              for(i=1; i<=pvalues; i++)
+              {
+                col = col + 2
+
+                B.set_right_border((start_row,end_row), col, "thin")
+              }
+            }
+          }
+
+        /* Overall Table */
+
+          B.set_top_border(start_row, (pos1,pos2), "medium")
+          B.set_bottom_border(end_row, (pos1,pos2), "medium")
+
+          B.set_right_border((start_row,end_row), end_col, "medium")
+
+      /* Footer */
+
+        row = end_row + 1
+
+        if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars) & bd.opt.test.footer)
+        {
+          spaces = " " :* (cols(bd.opt.test.stars) :- (range(1, cols(bd.opt.test.stars), 1)))
+
+          legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
+          legend = legend :+ spaces :+ " p(overall) < 0" :+ strofreal(bd.opt.test.stars)'
+
+          B.put_string(row, 1, legend)
+
+          row = row + rows(legend)
+        }
+
+        if(bd.opt.test.individual & bd.opt.test.scripts != . & any(bd.si.scripts) & bd.opt.test.footer)
+        {
+          legend = uchar(bd.opt.test.letters[1..rows(bd.oi.levels)])' :+ " sig. diff. from " :+ char(34) :+ bd.oi.labels :+ char(34) :+ " (p < 0" :+ strofreal(bd.opt.test.scripts) :+ ")"
+
+          B.put_string(row, 1, legend)
+        }
+    }
+
+  /* function : excelTableLongNoOver() */
+
+    void excelTableLongNoOver(struct braddev scalar bd,
+                              class  xl      scalar B,
+                              real           scalar input_row)
+    {
+      /* Creating Formats */
+
+        B.set_missing(".")
+
+        /* Font */
+
+          font = B.add_fontid()
+          B.fontid_set_font(font, bd.opt.excel.font_face, bd.opt.excel.font_size)
+
+          font_bold = B.add_fontid()
+          B.fontid_set_font(font_bold, bd.opt.excel.font_face, bd.opt.excel.font_size)
+          B.fontid_set_font_bold(font_bold, "on")
+
+        /* Stats - Text */
+
+          txt_stats_c = txt_stats_i = J(rows(bd.si.label), 1, "")
+
+          for(i=1; i<=rows(bd.si.label); i++)
+          {
+            /* Continuous */
+
+              fmt = bd.si.comma[i] ? "#,##0" : "0"
+
+              if(bd.si.roundc[i] > 0) fmt = fmt + "." + ("0" * bd.si.roundc[i])
+
+              if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & bd.si.stars[i]) fmt = "text"
+
+              if(!allof(bd.si.notation[i,.], "")) fmt = "text"
+
+              txt_stats_c[i] = fmt
+
+            /* Binary */
+
+              fmt = bd.si.comma[i] ? "#,##0" : "0"
+
+              if(bd.si.roundi[i] > 0) fmt = fmt + "." + ("0" * bd.si.roundi[i])
+              if(bd.si.percent[i])    fmt = fmt + "%"
+
+              if(bd.opt.test.individual & bd.opt.test.scripts != . & bd.si.scripts[i]) fmt = "text"
+
+              if(!allof(bd.si.notation[i,.], "")) fmt = "text"
+
+              txt_stats_i[i] = fmt
+          }
+
+        /* Stats - Format ID */
+
+          /* Continuous */
+
+            fmt_stats_c = J(rows(bd.si.label), 1, .)
+
+            for(i=1; i<=rows(bd.si.label); i++)
+            {
+              fmt_stats_c[i] = B.add_fmtid()
+              B.fmtid_set_fontid(fmt_stats_c[i], font)
+              B.fmtid_set_vertical_align(fmt_stats_c[i], "center")
+              B.fmtid_set_horizontal_align(fmt_stats_c[i], "center")
+              B.fmtid_set_number_format(fmt_stats_c[i], txt_stats_c[i])
+            }
+
+          /* Binary */
+
+            fmt_stats_i = J(rows(bd.si.label), 1, .)
+
+            for(i=1; i<=rows(bd.si.label); i++)
+            {
+              positions = selectindex(txt_stats_c :== txt_stats_i[i])
+              if(rows(positions) > 0 & cols(positions) > 0)
+              {
+                fmt_stats_i[i] = fmt_stats_c[positions[1]]
+                continue
+              }
+
+              fmt_stats_i[i] = B.add_fmtid()
+              B.fmtid_set_fontid(fmt_stats_i[i], font)
+              B.fmtid_set_vertical_align(fmt_stats_i[i], "center")
+              B.fmtid_set_horizontal_align(fmt_stats_i[i], "center")
+              B.fmtid_set_number_format(fmt_stats_i[i], txt_stats_i[i])
+            }
+        /* Title */
+
+          fmt_title = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_title, font_bold)
+
+        /* Whitespace */
+
+          fmt_whitespace = B.add_fmtid()
+          B.fmtid_set_border(fmt_whitespace, "medium")
+          B.fmtid_set_fill_pattern(fmt_whitespace, "solid", "white")
+
+        /* Header */
+
+          fmt_header = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_header, font_bold)
+          B.fmtid_set_horizontal_align(fmt_header, "center")
+          B.fmtid_set_top_border(fmt_header, "medium")
+          B.fmtid_set_bottom_border(fmt_header, "medium")
+          B.fmtid_set_fill_pattern(fmt_header, "solid", bd.opt.excel.color[1])
+
+        /* Variables */
+
+          fmt_question = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_question, font_bold)
+          B.fmtid_set_horizontal_align(fmt_question, "left")
+          B.fmtid_set_left_border(fmt_question, "medium")
+          B.fmtid_set_right_border(fmt_question, "medium")
+          B.fmtid_set_fill_pattern(fmt_question, "solid", bd.opt.excel.color[2])
+
+          fmt_answer = B.add_fmtid()
+          B.fmtid_set_fontid(fmt_answer, font_bold)
+          B.fmtid_set_horizontal_align(fmt_answer, "right")
+          B.fmtid_set_left_border(fmt_answer, "medium")
+          B.fmtid_set_right_border(fmt_answer, "medium")
+          B.fmtid_set_fill_pattern(fmt_answer, "solid", bd.opt.excel.color[2])
+
+      /* Creating Header */
+
+        header = bd.si.label'
+
+      /* Initializing Table */
+
+        row = input_row
+        col = 1
+
+        start_row = row
+
+        end_col = 1 + cols(header)
+
+      /* Table - Title */
+
+        title = getTitle(bd.vi)
+
+        if(title != "")
+        {
+          B.put_string(row, col, title)
+          B.set_fmtid(row, col, fmt_title)
+
+          row = row + 1
+          start_row = row
+        }
+
+      /* Table - Header */
+
+        B.set_fmtid(row, 1, fmt_whitespace)
+
+        B.put_string(row, (col+1), header)
+        B.set_fmtid(row, (2,end_col), fmt_header)
+
+        row = row + 1
+
+      /* Table - Contents */
+
+        for(i=1; i<=rows(bd.vi); i++)
+        {
+          col = 1
+
+          /* Names */
+
+            if(bd.vi[i].type == "individual")
+            {
+              B.put_string(row, col, bd.vi[i].varlist)
+              B.set_fmtid(row, col, fmt_question)
+            }
+            else
+            {
+              B.put_string(row, col, bd.vi[i].question)
+              B.set_fmtid(row, col, fmt_question)
+
+              row = row + 1
+
+              pos1 = row
+              pos2 = row + rows(bd.vi[i].answers) - 1
+
+              B.put_string(row, col, bd.vi[i].answers)
+              B.set_fmtid((pos1,pos2), col, fmt_answer)
+            }
+
+          /* Statistics */
+
+            end_row = row + rows(bd.vi[i].answers) - 1
+
+            for(j=1; j<=rows(bd.si.label); j++)
+            {
+              col = col + 1
+
+              /* Numeric */
+
+                if(bd.si.name[j] != "ci" & ((bd.vi[i].binary & txt_stats_i[j] != "text") | (!bd.vi[i].binary & txt_stats_c[j] != "text")))
+                {
+                  if(bd.si.name[j] == "obs")  values = bd.vi[i].results.obs
+                  if(bd.si.name[j] == "nyes") values = bd.vi[i].results.nyes
+                  if(bd.si.name[j] == "mean") values = bd.vi[i].results.mean
+                  if(bd.si.name[j] == "se")   values = bd.vi[i].results.se
+                  if(bd.si.name[j] == "sd")   values = bd.vi[i].results.sd
+                  if(bd.si.name[j] == "var")  values = bd.vi[i].results.var
+                  if(bd.si.name[j] == "lci")  values = bd.vi[i].results.lci
+                  if(bd.si.name[j] == "uci")  values = bd.vi[i].results.uci
+                  if(bd.si.name[j] == "min")  values = bd.vi[i].results.min
+                  if(bd.si.name[j] == "max")  values = bd.vi[i].results.max
+
+                  B.put_number(row, col, values)
+
+                  if(bd.vi[i].binary) B.set_fmtid((row,end_row), col, fmt_stats_i[j])
+                  else                B.set_fmtid((row,end_row), col, fmt_stats_c[j])
+
+                  continue
+                }
+
+              /* Text */
+
+                if(bd.si.name[j] != "ci")
+                {
+                  if(bd.si.name[j] == "obs")  values = bd.vi[i].results.obs
+                  if(bd.si.name[j] == "nyes") values = bd.vi[i].results.nyes
+                  if(bd.si.name[j] == "mean") values = bd.vi[i].results.mean
+                  if(bd.si.name[j] == "se")   values = bd.vi[i].results.se
+                  if(bd.si.name[j] == "sd")   values = bd.vi[i].results.sd
+                  if(bd.si.name[j] == "var")  values = bd.vi[i].results.var
+                  if(bd.si.name[j] == "lci")  values = bd.vi[i].results.lci
+                  if(bd.si.name[j] == "uci")  values = bd.vi[i].results.uci
+                  if(bd.si.name[j] == "min")  values = bd.vi[i].results.min
+                  if(bd.si.name[j] == "max")  values = bd.vi[i].results.max
+
+                  if(bd.vi[i].binary & bd.si.percent[j]) values = values :* 100
+
+                  format = "%32." + (bd.vi[i].binary ? strofreal(bd.si.roundi[j]) : strofreal(bd.si.roundc[j])) + "f" + (bd.si.comma[j] * "c")
+
+                  strings = strofreal(values, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")
+                }
+                else
+                {
+                  values1 = bd.vi[i].results.lci
+                  values2 = bd.vi[i].results.uci
+
+                  if(bd.vi[i].binary & bd.si.percent[j])
+                  {
+                    values1 = values1 :* 100
+                    values2 = values2 :* 100
+                  }
+
+                  format = "%32." + (bd.vi[i].binary ? strofreal(bd.si.roundi[j]) : strofreal(bd.si.roundc[j])) + "f" + (bd.si.comma[j] * "c")
+
+                  strings = (strofreal(values1, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")) :+ bd.si.ci_separator :+ (strofreal(values2, format) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%"))
+                  values  = values1
+                }
+
+                strings = bd.si.notation[j,1] :+ strings :+ bd.si.notation[j,2]
+                strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
+
+                B.put_string(row, col, strings)
+
+                if(bd.vi[i].binary) B.set_fmtid((row,end_row), col, fmt_stats_i[j])
+                else                B.set_fmtid((row,end_row), col, fmt_stats_c[j])
+            }
+
+          /* Setting Bottom Border */
+
+            if(i < rows(bd.vi))
+            {
+              B.set_bottom_border(end_row, (1,end_col), "thin")
+            }
+
+          row = end_row + 1
+        }
+
+        end_row = row - 1
+
+      /* Formatting - Borders */
+
+        B.set_right_border((start_row,end_row), end_col, "medium")
+
+        B.set_bottom_border(end_row, (1,end_col), "medium")
+    }
+
+end
