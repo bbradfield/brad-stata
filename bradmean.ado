@@ -861,6 +861,12 @@ mata:
 
       vi = select(vi, positions)
 
+      if(rows(vi) == 0)
+      {
+        printf("{error:No variables defined. Check spacing around comma separating options.}\n")
+        exit(119)
+      }
+
       return(vi)
     }
 
