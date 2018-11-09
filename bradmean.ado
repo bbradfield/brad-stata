@@ -2626,7 +2626,7 @@ mata:
 
           h_separator = "{hline " :+ strofreal(col_lengths) :+ "}"
 
-          if(rows(pos1) > 0) results_table[pos1,.] = J(rows(pos1), 1, h_separator)
+          if(rows(pos1) > 0 & cols(pos1) > 0) results_table[pos1,.] = J(rows(pos1), 1, h_separator)
 
           results_table = results_table \ h_separator
 
@@ -2643,7 +2643,7 @@ mata:
 
           v_separator = J(rows(results_table), 1, "{c |}")
 
-          if(rows(pos1) > 0)
+          if(rows(pos1) > 0 & cols(pos1) > 0)
           {
             v_separator[pos1] = J(rows(pos1), 1, "{c +}")
           }
@@ -2859,7 +2859,7 @@ mata:
 
           h_separator = "{hline " :+ strofreal(col_lengths) :+ "}"
 
-          if(rows(pos1) > 0) results_table[pos1,.] = J(rows(pos1), 1, h_separator)
+          if(rows(pos1) > 0 & cols(pos1) > 0) results_table[pos1,.] = J(rows(pos1), 1, h_separator)
 
           results_table = results_table \ h_separator
 
@@ -2875,7 +2875,7 @@ mata:
 
           v_separator = J(rows(results_table), 1, "{c |}")
 
-          if(rows(pos1) > 0)
+          if(rows(pos1) > 0 & cols(pos1) > 0)
           {
             v_separator[pos1] = J(rows(pos1), 1, "{c +}")
           }
@@ -3444,10 +3444,10 @@ mata:
               strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
 
               pos1 = selectindex(values :>= 0.01)
-              if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+              if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
 
               pos1 = selectindex(values :< 0.001)
-              if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+              if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
 
               strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
 
@@ -3486,10 +3486,10 @@ mata:
                   strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
 
                   pos1 = selectindex(values :>= 0.01)
-                  if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+                  if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
 
                   pos1 = selectindex(values :< 0.001)
-                  if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+                  if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
 
                   strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
 
@@ -3968,10 +3968,10 @@ mata:
               strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
 
               pos1 = selectindex(values :>= 0.01)
-              if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+              if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
 
               pos1 = selectindex(values :< 0.001)
-              if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+              if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
 
               strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
               strings = J(rows(strings), 1, ""), J(1, cols(over_labels), strings)
@@ -4015,10 +4015,10 @@ mata:
                 strings = "P = " :+ strtrim(strofreal(values, "%32.3f"))
 
                 pos1 = selectindex(values :>= 0.01)
-                if(rows(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
+                if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = "P = " :+ strtrim(strofreal(values[pos1], "%32.2f"))
 
                 pos1 = selectindex(values :< 0.001)
-                if(rows(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
+                if(rows(pos1) > 0 & cols(pos1) > 0) strings[pos1] = J(rows(pos1), 1, "P < 0.001")
 
                 strings = ((values :!= .) :* strings) :+ ((values :== .) :* ".")
 
