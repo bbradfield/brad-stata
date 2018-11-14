@@ -129,7 +129,6 @@
 {p2colset 8 27 28 8}{p2col:{opt roundc(#)}} round for continuous variables. Default is {bf:7}{p_end}
 {p2colset 8 27 28 8}{p2col:{opt pct}} format binary variables as a percentage{p_end}
 {p2colset 8 27 28 8}{p2col:{opt per:cent}} format binary variables as a percentage{p_end}
-{p2colset 8 27 28 8}{p2col:{opt per:cent}} format binary variables as a percentage{p_end}
 {p2colset 8 27 28 8}{p2col:{opt nosym:bol}} do not display % after percentage{p_end}
 {p2colset 8 27 28 8}{p2col:{opth not:ation(string)}} choose to surround statistic with {opt par:entheses} or {opt bra:ckets}{p_end}
 {p2colset 8 27 28 8}{p2col:{opt star:s}} display significance stars on this statistic. Default is {bf:mean}{p_end}

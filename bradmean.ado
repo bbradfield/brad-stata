@@ -462,7 +462,7 @@ mata:
                   values = select(values, ((values :> 0) :& (values :< 1)))
                   values = sort(values', 1)'
 
-                  if(cols(values) > 3)  opt.test.stars = values[., (1..3)]
+                  if(cols(values) > 3)  values = values[., (1..3)]
 
                   if(cols(values) != 0) opt.test.stars = values
                   else                  opt.test.stars = (0.01, 0.05)
@@ -2053,7 +2053,7 @@ mata:
         if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars) & bd.opt.test.footer)
         {
           legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
-          legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} p(overall) < 0" :+ strofreal(bd.opt.test.stars)'
+          legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} p(overall) < 0" :+ strofreal(revorder(bd.opt.test.stars))'
           display(legend)
         }
 
@@ -3569,7 +3569,7 @@ mata:
           spaces = " " :* (cols(bd.opt.test.stars) :- (range(1, cols(bd.opt.test.stars), 1)))
 
           legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
-          legend = legend :+ spaces :+ " p(overall) < 0" :+ strofreal(bd.opt.test.stars)'
+          legend = legend :+ spaces :+ " p(overall) < 0" :+ strofreal(revorder(bd.opt.test.stars))'
 
           B.put_string(row, 1, legend)
 
@@ -4125,7 +4125,7 @@ mata:
           spaces = " " :* (cols(bd.opt.test.stars) :- (range(1, cols(bd.opt.test.stars), 1)))
 
           legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
-          legend = legend :+ spaces :+ " p(overall) < 0" :+ strofreal(bd.opt.test.stars)'
+          legend = legend :+ spaces :+ " p(overall) < 0" :+ strofreal(revorder(bd.opt.test.stars))'
 
           B.put_string(row, 1, legend)
 
