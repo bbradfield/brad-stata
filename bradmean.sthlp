@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.5.0  08nov2018}{...}
+{* *! version 1.5.1  30nov2018}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}

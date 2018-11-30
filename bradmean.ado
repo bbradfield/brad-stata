@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.5.0                                                **
-**   Date:         11/08/2018                                           **
+**   Version:      1.5.1                                                **
+**   Date:         11/30/2018                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -1567,9 +1567,12 @@ mata:
                 {
                   for(k=j+1; k<=cols(pos); k++)
                   {
-                    stata("cap ttesti " + strofreal(res.obs[i,pos[j]]) + " " + strofreal(res.mean[i,pos[j]]) + " " + strofreal(res.sd[i,pos[j]]) + " " + strofreal(res.obs[i,pos[k]]) + " " + strofreal(res.mean[i,pos[k]]) + " " + strofreal(res.sd[i,pos[k]]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
-                    res.ind_statistic[i,((pos[j] - 1) * levels) + pos[k]] = res.ind_statistic[i,((pos[k] - 1) * levels) + pos[j]] = st_numscalar("r(t)")
-                    res.ind_pvalue[i,((pos[j] - 1) * levels) + pos[k]]    = res.ind_pvalue[i,((pos[k] - 1) * levels) + pos[j]]    = st_numscalar("r(p)")
+                    if(res.obs[i,pos[j]] != 0 & res.obs[i,pos[k]] != 0)
+                    {
+                      stata("cap ttesti " + strofreal(res.obs[i,pos[j]]) + " " + strofreal(res.mean[i,pos[j]]) + " " + strofreal(res.sd[i,pos[j]]) + " " + strofreal(res.obs[i,pos[k]]) + " " + strofreal(res.mean[i,pos[k]]) + " " + strofreal(res.sd[i,pos[k]]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                      res.ind_statistic[i,((pos[j] - 1) * levels) + pos[k]] = res.ind_statistic[i,((pos[k] - 1) * levels) + pos[j]] = st_numscalar("r(t)")
+                      res.ind_pvalue[i,((pos[j] - 1) * levels) + pos[k]]    = res.ind_pvalue[i,((pos[k] - 1) * levels) + pos[j]]    = st_numscalar("r(p)")
+                    }
                   }
                 }
               }
@@ -1618,9 +1621,12 @@ mata:
               {
                 for(i=1; i<=rows; i++)
                 {
-                  stata("cap ttesti " + strofreal(res.obs[i,1]) + " " + strofreal(res.mean[i,1]) + " " + strofreal(res.sd[i,1]) + " " + strofreal(res.obs[i,2]) + " " + strofreal(res.mean[i,2]) + " " + strofreal(res.sd[i,2]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
-                  res.ovr_statistic[i] = st_numscalar("r(t)")
-                  res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  if(res.obs[i,1] != 0 & res.obs[i,2] != 0)
+                  {
+                    stata("cap ttesti " + strofreal(res.obs[i,1]) + " " + strofreal(res.mean[i,1]) + " " + strofreal(res.sd[i,1]) + " " + strofreal(res.obs[i,2]) + " " + strofreal(res.mean[i,2]) + " " + strofreal(res.sd[i,2]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                    res.ovr_statistic[i] = st_numscalar("r(t)")
+                    res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  }
                 }
               }
               else
@@ -1872,9 +1878,12 @@ mata:
               {
                 if(bd.opt.test.t_overall)
                 {
-                  stata("cap ttesti " + strofreal(res.obs[i,1]) + " " + strofreal(res.mean[i,1]) + " " + strofreal(res.sd[i,1]) + " " + strofreal(res.obs[i,2]) + " " + strofreal(res.mean[i,2]) + " " + strofreal(res.sd[i,2]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
-                  res.ovr_statistic[i] = st_numscalar("r(t)")
-                  res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  if(res.obs[i,1] != 0 & res.obs[i,2] != 0)
+                  {
+                    stata("cap ttesti " + strofreal(res.obs[i,1]) + " " + strofreal(res.mean[i,1]) + " " + strofreal(res.sd[i,1]) + " " + strofreal(res.obs[i,2]) + " " + strofreal(res.mean[i,2]) + " " + strofreal(res.sd[i,2]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                    res.ovr_statistic[i] = st_numscalar("r(t)")
+                    res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  }
                 }
                 else
                 {
@@ -1897,9 +1906,12 @@ mata:
                   {
                     for(k=j+1; k<=cols(pos); k++)
                     {
-                      stata("cap ttesti " + strofreal(res.obs[i,pos[j]]) + " " + strofreal(res.mean[i,pos[j]]) + " " + strofreal(res.sd[i,pos[j]]) + " " + strofreal(res.obs[i,pos[k]]) + " " + strofreal(res.mean[i,pos[k]]) + " " + strofreal(res.sd[i,pos[k]]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
-                      res.ind_statistic[i,((pos[j] - 1) * levels) + pos[k]] = res.ind_statistic[i,((pos[k] - 1) * levels) + pos[j]] = st_numscalar("r(t)")
-                      res.ind_pvalue[i,((pos[j] - 1) * levels) + pos[k]]    = res.ind_pvalue[i,((pos[k] - 1) * levels) + pos[j]]    = st_numscalar("r(p)")
+                      if(res.obs[i,pos[j]] != 0 & res.obs[i,pos[k]] != 0)
+                      {
+                        stata("cap ttesti " + strofreal(res.obs[i,pos[j]]) + " " + strofreal(res.mean[i,pos[j]]) + " " + strofreal(res.sd[i,pos[j]]) + " " + strofreal(res.obs[i,pos[k]]) + " " + strofreal(res.mean[i,pos[k]]) + " " + strofreal(res.sd[i,pos[k]]) + ", unequal level(" + strofreal(bd.si.ci_level) + ") ")
+                        res.ind_statistic[i,((pos[j] - 1) * levels) + pos[k]] = res.ind_statistic[i,((pos[k] - 1) * levels) + pos[j]] = st_numscalar("r(t)")
+                        res.ind_pvalue[i,((pos[j] - 1) * levels) + pos[k]]    = res.ind_pvalue[i,((pos[k] - 1) * levels) + pos[j]]    = st_numscalar("r(p)")
+                      }
                     }
                   }
                 }
