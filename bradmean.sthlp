@@ -95,7 +95,7 @@
 {p2colset 8 23 24 8}{p2col:{opt xival:s}} enable xi value labels (default is {bf:ON}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt xivar:s}} enable xi variable labels (default is {bf:OFF}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt series}} enable both series value and series variable labels{p_end}
-{p2colset 8 23 24 8}{p2col:{opt seriesval:s}} enable series value labels (default is {bf:ON}){p_end}
+{p2colset 8 23 24 8}{p2col:{opt seriesval:s}} enable series value labels (default is {bf:OFF}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt seriesvar:s}} enable series variable labels (default is {bf:OFF}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt wide}} print table in a wide format{p_end}
 {p2colset 8 23 24 8}{p2col:{opth al:ign(string)}} choose {opt l:eft}, {opt c:enter}, or {opt r:ight} alignment of statistics{p_end}
