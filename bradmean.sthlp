@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.5.1  30nov2018}{...}
+{* *! version 1.5.3  05march2019}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -99,6 +99,7 @@
 {p2colset 8 23 24 8}{p2col:{opt seriesvar:s}} enable series variable labels (default is {bf:OFF}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt wide}} print table in a wide format{p_end}
 {p2colset 8 23 24 8}{p2col:{opth al:ign(string)}} choose {opt l:eft}, {opt c:enter}, or {opt r:ight} alignment of statistics{p_end}
+{p2colset 8 23 24 8}{p2col:{opt nostat}} do not display statistic names (wide only & single statistic only){p_end}
 {p2colset 8 23 24 8}{p2col:{opt noprint}} do not display table (can be used with Excel output){p_end}
 
 {phang}
