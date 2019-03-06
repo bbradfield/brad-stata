@@ -86,27 +86,31 @@ mata:
       rows = rows(needle)
       cols = cols(needle)
 
-      if(args() == 3)
-      {
+      /* Summary */
+
+        if(args() == 3)
+        {
+          for(i=rows; i; i--)
+          {
+            for(j=cols; j; j--)
+            {
+              if(anyof(haystack, needle[i,j])) return(1)
+            }
+          }
+          return(0)
+        }
+
+      /* All */
+
+        values = J(rows, cols, .)
+
         for(i=rows; i; i--)
         {
           for(j=cols; j; j--)
           {
-            if(anyof(haystack, needle[i,j])) return(1)
+            values[i,j] = anyof(haystack, needle[i,j])
           }
         }
-        return(0)
-      }
-
-      values = J(rows, cols, .)
-
-      for(i=rows; i; i--)
-      {
-        for(j=cols; j; j--)
-        {
-          values[i,j] = anyof(haystack, needle[i,j])
-        }
-      }
 
       return(values)
     }
@@ -584,28 +588,17 @@ mata:
         {
           rc = _stata("_svy_newrule", 1)
 
-          if(rc != 0)
-          {
-            errprintf("{error:Data is not svyset}\n")
-            exit(119)
-          }
+          if(rc != 0) { errprintf("{error:Data is not svyset}\n"); exit(119); }
         }
 
         if(weight.subpop != "")
         {
           stata("cap count if !missing(" + weight.subpop + ") & (" + weight.subpop + " != 1) & (" + weight.subpop + " != 0)")
 
-          if(st_numscalar("r(N)") != 0)
-          {
-            errprintf("{error:Subpop variable must be a 0/1 variable}\n")
-            exit(119)
-          }
+          if(st_numscalar("r(N)") != 0) { errprintf("{error:Subpop variable must be a 0/1 variable}\n"); exit(119); }
         }
 
-        if(weight.survey)
-        {
-          stata("svymarkout " + st_local("touse"))
-        }
+        if(weight.survey) stata("svymarkout " + st_local("touse"))
 
       return(weight)
     }
@@ -848,18 +841,9 @@ mata:
 
           /* Other Information */
 
-            if(vi[i].type == "individual")
-            {
-              vi[i] = getVarInfoIndividual(bd, vi[i])
-            }
-            else if(vi[i].type == "xi")
-            {
-              vi[i] = getVarInfoXi(bd, vi[i])
-            }
-            else if(vi[i].type == "series")
-            {
-              vi[i] = getVarInfoSeries(bd, vi[i])
-            }
+            if(vi[i].type == "individual")  vi[i] = getVarInfoIndividual(bd, vi[i])
+            else if(vi[i].type == "xi")     vi[i] = getVarInfoXi(bd, vi[i])
+            else if(vi[i].type == "series") vi[i] = getVarInfoSeries(bd, vi[i])
         }
 
       /* Limiting Informaton */
@@ -951,11 +935,7 @@ mata:
         {
           stata("cap count if !missing(" + vi.varlist[i] + ") & (" + vi.varlist[i] + " != 1) & (" + vi.varlist[i] + " != 0)")
 
-          if(st_numscalar("r(N)") > 0)
-          {
-            vi.binary = 0
-            break
-          }
+          if(st_numscalar("r(N)") > 0) { vi.binary = 0; break; }
         }
 
       /* Labels */
@@ -973,15 +953,15 @@ mata:
 
       /* Question */
 
-        if(bd.opt.display.series_variables)
+        if(!bd.opt.display.series_variables)
+        {
+          vi.question = vi.term
+        }
+        else
         {
           labels = strtrim(substr(vi.labels, strpos(vi.labels, "]") :+ 1))
 
           vi.question = select(labels, udstrlen(labels) :== max(udstrlen(labels)))[1]
-        }
-        else
-        {
-          vi.question = vi.term
         }
 
       return(vi)
@@ -1011,21 +991,7 @@ mata:
     {
       struct overInfo scalar oi
 
-      /* Empty Varlist */
-
-        if(st_local("over") == "")
-        {
-          bd.opt.test.overall = 0
-          bd.opt.test.individual = 0
-          bd.opt.display.wide = 0
-          return(oi)
-        }
-
-      /* Getting Varlist */
-
-        oi.varlist = tokens(st_local("over"))
-
-      /* Marking Out Variables */
+      /* Marking Out Varlist */
 
         if(!bd.opt.over.miss)
         {
@@ -1035,17 +1001,26 @@ mata:
           {
             stata("cap markout " + st_local("touse") + " " + invtokens(subinstr(bd.vi[i].varlist, "i.", "")))
           }
+
+          stata("cap count if " + st_local("touse"))
+
+          if(st_numscalar("r(N)") == 0) { errprintf("{error:No observations}\n"); exit(2000); }
         }
+
+      /* Empty Varlist */
+
+        if(st_local("over") == "") return(oi)
+
+      /* Getting Varlist */
+
+        oi.varlist = tokens(st_local("over"))
+
+      /* Marking Out Overlist */
 
         stata("cap markout " + st_local("touse") + " " + invtokens(oi.varlist) + ", strok")
-
         stata("cap count if " + st_local("touse"))
 
-        if(st_numscalar("r(N)") == 0)
-        {
-          errprintf("{error:No observations}\n")
-          exit(2000)
-        }
+        if(st_numscalar("r(N)") == 0) { errprintf("{error:No observations}\n"); exit(2000); }
 
       /* Generating Variable */
 
@@ -1056,14 +1031,7 @@ mata:
           stata("cap levelsof " + oi.name + " if " + st_local("touse") + ", local(lvls)")
           levels = tokens(st_local("lvls"))
 
-          if(cols(levels) == 1)
-          {
-            errprintf("{error:Only 1 level of over, treating as {it:if}}\n")
-            bd.opt.test.overall = 0
-            bd.opt.test.individual = 0
-            bd.opt.display.wide = 0
-            return(oi)
-          }
+          if(cols(levels) == 1) { errprintf("{error:Only 1 level of over, treating as {it:if}}\n"); return(oi); }
         }
         else
         {
@@ -1075,15 +1043,7 @@ mata:
           stata("cap levelsof " + group_num + ", local(lvls)")
           levels = tokens(st_local("lvls"))
 
-          if(cols(levels) == 1)
-          {
-            errprintf("{error:Only 1 level of over, treating as {it:if}}\n")
-            stata("cap drop " + group_num)
-            bd.opt.test.overall = 0
-            bd.opt.test.individual = 0
-            bd.opt.display.wide = 0
-            return(oi)
-          }
+          if(cols(levels) == 1) { errprintf("{error:Only 1 level of over, treating as {it:if}}\n"); stata("cap drop " + group_num); return(oi); }
 
           group_str = st_tempname()
           stata("cap egen " + group_str + " = concat(" + st_local("over") + ") if " + st_local("touse") + `", decode punct(", ")"')
@@ -2040,7 +2000,7 @@ mata:
           /* Mean */
 
             stata(cmd_mean_pre + vi.term + cmd_mean_suf_1 + cmd_mean_suf_2)
-            mat_results = st_matrix("r(table)")'
+            mat_results = st_matrix("r(table)")
 
             if(cols(mat_results) == 0) return(res)
 
@@ -2049,12 +2009,12 @@ mata:
             pos     = selectindex(inlist(bd.oi.levels, pos))
             num     = cols(pos)
 
-            res.mean[pos,.] = rowshape(mat_results[.,1],vars)'
-            res.se[pos,.]   = rowshape(mat_results[.,2],vars)'
-            res.t[pos,.]    = rowshape(mat_results[.,3],vars)'
-            res.lci[pos,.]  = rowshape(mat_results[.,5],vars)'
-            res.uci[pos,.]  = rowshape(mat_results[.,6],vars)'
-            res.df[pos,.]   = rowshape(mat_results[.,7],vars)'
+            res.mean[pos,.] = rowshape(mat_results[1,.],vars)'
+            res.se[pos,.]   = rowshape(mat_results[2,.],vars)'
+            res.t[pos,.]    = rowshape(mat_results[3,.],vars)'
+            res.lci[pos,.]  = rowshape(mat_results[5,.],vars)'
+            res.uci[pos,.]  = rowshape(mat_results[6,.],vars)'
+            res.df[pos,.]   = rowshape(mat_results[7,.],vars)'
 
             if(bd.opt.weight.subpop == "") res.obs[pos,.] = rowshape(st_matrix("e(_N)"), vars)'
             else                           res.obs[pos,.] = rowshape(st_matrix("e(_N_subp)"), vars)'
@@ -2262,14 +2222,8 @@ mata:
       if(direction == "+") vals = sort(vals, 2)
       else                 vals = sort(vals, -2)
 
-      if(rows(selectindex(vals[.,2] :== .)) > 0)
-      {
-        sort_order = vals[selectindex(vals[.,2] :!= .),1] \ vals[selectindex(vals[.,2] :== .),1]
-      }
-      else
-      {
-        sort_order = vals[.,1]
-      }
+      if(rows(selectindex(vals[.,2] :== .)) > 0) sort_order = vals[selectindex(vals[.,2] :!= .),1] \ vals[selectindex(vals[.,2] :== .),1]
+      else                                       sort_order = vals[.,1]
 
       return(sort_order')
     }
@@ -2284,6 +2238,8 @@ mata:
     {
       if(!bd.opt.display.print) return(J(0,0,.))
 
+      lvls = cols(bd.oi.levels)
+
       /* Title */
 
         title = getTitle(bd.vi)
@@ -2295,7 +2251,7 @@ mata:
 
       /* Legend */
 
-        if(cols(bd.oi.levels) > 0 & bd.opt.over.legend)
+        if(lvls > 0 & bd.opt.over.legend)
         {
           legend = getLegend(bd.oi)
           printf("\n")
@@ -2306,32 +2262,26 @@ mata:
 
         printf("\n")
 
-        if(cols(bd.oi.levels) == 0)
-        {
-          printLongNoOver(bd)
-        }
-        else if(!bd.opt.display.wide)
-        {
-          printLongOver(bd)
-        }
-        else
-        {
-          printWide(bd)
-        }
+        if(lvls == 0)   printLongNoOver(bd)
+        else if(!bd.opt.display.wide) printLongOver(bd)
+        else                          printWide(bd)
 
       /* Footer */
 
-        if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars) & bd.opt.test.footer)
+        if(lvls > 1)
         {
-          legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
-          legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} p(overall) < 0" :+ strofreal(revorder(bd.opt.test.stars))'
-          display(legend)
-        }
+          if(bd.opt.test.overall & cols(bd.opt.test.stars) > 0 & any(bd.si.stars) & bd.opt.test.footer)
+          {
+            legend = range(1, cols(bd.opt.test.stars), 1) :* uchar(735)
+            legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} p(overall) < 0" :+ strofreal(revorder(bd.opt.test.stars))'
+            display(legend)
+          }
 
-        if(bd.opt.test.individual & bd.opt.test.scripts != . & any(bd.si.scripts) & bd.opt.test.footer)
-        {
-          legend = bd.opt.test.letters[1..cols(bd.oi.levels)]' :+ " sig. diff. from " :+ char(34) :+ bd.oi.labels' :+ char(34) :+ " (p < 0" :+ strofreal(bd.opt.test.scripts) :+ ")"
-          display(legend)
+          if(bd.opt.test.individual & bd.opt.test.scripts != . & any(bd.si.scripts) & bd.opt.test.footer)
+          {
+            legend = bd.opt.test.letters[1..lvls]' :+ " sig. diff. from " :+ char(34) :+ bd.oi.labels' :+ char(34) :+ " (p < 0" :+ strofreal(bd.opt.test.scripts) :+ ")"
+            display(legend)
+          }
         }
 
       printf("\n")
@@ -3736,15 +3686,9 @@ mata:
 
       /* Creating Table */
 
-        if(cols(bd.oi.levels) == 0)
-        {
-          excelLongNoOver(bd, B, row)
-        }
-        else
-        {
-          if(!bd.opt.display.wide) excelLongOver(bd, B, row)
-          else                     excelWide(bd, B, row)
-        }
+        if(cols(bd.oi.levels) == 0)   excelLongNoOver(bd, B, row)
+        else if(!bd.opt.display.wide) excelLongOver(bd, B, row)
+        else                          excelWide(bd, B, row)
 
       B.close_book()
     }
