@@ -1154,7 +1154,7 @@ mata:
 
         if(cols(statlist) == 0)
         {
-          statlist = bd.opt.display.wide ? "mean" : ("obs", "nyes", "mean", "sd", "lci", "uci")
+          statlist = bd.opt.display.wide ? "mean" : ("obs", "nyes", "mean", "se", "lci", "uci")
         }
 
       /* Filling Names & Labels */
