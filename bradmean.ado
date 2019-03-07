@@ -1272,7 +1272,7 @@ mata:
               if(token == "ci")          pos = selectindex(inlist(si.name, ("lci", "uci")))
               else if(token == "count")  pos = selectindex(inlist(si.name, ("obs", "nyes")))
               else if(token == "error")  pos = selectindex(inlist(si.name, ("se", "sd", "var")))
-              else if(token == "minmax") pos = selectindex(inlist(si.name, ("minx", "max")))
+              else if(token == "minmax") pos = selectindex(inlist(si.name, ("min", "max")))
             }
 
             cols = cols(pos)
