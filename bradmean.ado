@@ -910,6 +910,9 @@ mata:
         if(bd.opt.display.xi_values & varlab != "") vi.answers = st_vlmap(varlab, vi.levels)
         else                                        vi.answers = vi.varlist :+ " == " :+ strofreal(vi.levels)
 
+        pos = selectindex(vi.answers :== "")
+        if(length(pos) > 0) vi.answers[pos] = vi.varlist :+ " == " :+ strofreal(vi.levels[pos])
+
       /* Question */
 
         vi.question = (bd.opt.display.xi_variables & vi.labels != "") ? vi.labels : vi.term
@@ -950,6 +953,9 @@ mata:
       /* Answers */
 
         vi.answers = bd.opt.display.series_values ? substr(vi.labels, strpos(vi.labels, "[") :+ 1, strpos(vi.labels, "]") :- 2) : vi.varlist
+
+        pos = selectindex(vi.answers :== "")
+        if(length(pos) > 0) vi.answers[pos] = vi.varlist[pos]
 
       /* Question */
 
