@@ -3288,14 +3288,8 @@ mata:
           cols = cols(pos)
           if(cols > 0) col_lengths[pos] = J(1, cols, 5)
 
-          col_lengths
-
           if(col_lengths[2] :> 80)      col_lengths[2] = 80
           else if(col_lengths[2] :< 14) col_lengths[2] = 14
-
-          col_lengths
-
-          display(fin_table[.,2],1)
 
         /* Variable Names */
 
