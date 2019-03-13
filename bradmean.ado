@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.5.3                                                **
-**   Date:         03/05/2019                                           **
+**   Version:      1.5.4                                                **
+**   Date:         03/12/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -2447,13 +2447,13 @@ mata:
           pos = selectindex(fin_table[.,1] :== "1")
           if(length(pos) > 0)
           {
-            fin_table[pos,2] = " {lalign " :+ strofreal(col_lengths[2]) :+ ":" :+ abbrev(fin_table[pos,2], col_lengths[2]) :+ "} {c |}"
+            fin_table[pos,2] = " {lalign " :+ strofreal(col_lengths[2]) :+ ":" :+ substr(fin_table[pos,2], 1, col_lengths[2]) :+ "} {c |}"
           }
 
           pos = selectindex(fin_table[.,1] :== "2")
           if(length(pos) > 0)
           {
-            fin_table[pos,2] = " {ralign " :+ strofreal(col_lengths[2]) :+ ":" :+ abbrev(fin_table[pos,2], col_lengths[2]) :+ "} {c |}"
+            fin_table[pos,2] = " {ralign " :+ strofreal(col_lengths[2]) :+ ":" :+ substr(fin_table[pos,2], 1, col_lengths[2]) :+ "} {c |}"
           }
 
         /* Statistics */
@@ -2848,13 +2848,13 @@ mata:
           pos = selectindex(fin_table[.,1] :== "1")
           if(length(pos) > 0)
           {
-            fin_table[pos,2] = " {lalign " :+ strofreal(col_lengths[2]) :+ ":" :+ abbrev(fin_table[pos,2], col_lengths[2]) :+ "} {c |}"
+            fin_table[pos,2] = " {lalign " :+ strofreal(col_lengths[2]) :+ ":" :+ substr(fin_table[pos,2], 1, col_lengths[2]) :+ "} {c |}"
           }
 
           pos = selectindex(fin_table[.,1] :== "2")
           if(length(pos) > 0)
           {
-            fin_table[pos,2] = " {ralign " :+ strofreal(col_lengths[2]) :+ ":" :+ abbrev(fin_table[pos,2], col_lengths[2]) :+ "} {c |}"
+            fin_table[pos,2] = " {ralign " :+ strofreal(col_lengths[2]) :+ ":" :+ substr(fin_table[pos,2], 1, col_lengths[2]) :+ "} {c |}"
           }
 
         /* Statistics */
@@ -3288,21 +3288,27 @@ mata:
           cols = cols(pos)
           if(cols > 0) col_lengths[pos] = J(1, cols, 5)
 
+          col_lengths
+
           if(col_lengths[2] :> 80)      col_lengths[2] = 80
           else if(col_lengths[2] :< 14) col_lengths[2] = 14
+
+          col_lengths
+
+          display(fin_table[.,2],1)
 
         /* Variable Names */
 
           pos = selectindex(fin_table[.,1] :== "1")
           if(length(pos) > 0)
           {
-            fin_table[pos,2] = " {lalign " :+ strofreal(col_lengths[2]) :+ ":" :+ abbrev(fin_table[pos,2], col_lengths[2]) :+ "} {c |}"
+            fin_table[pos,2] = " {lalign " :+ strofreal(col_lengths[2]) :+ ":" :+ substr(fin_table[pos,2], 1, col_lengths[2]) :+ "} {c |}"
           }
 
           pos = selectindex(fin_table[.,1] :== "2")
           if(length(pos) > 0)
           {
-            fin_table[pos,2] = " {ralign " :+ strofreal(col_lengths[2]) :+ ":" :+ abbrev(fin_table[pos,2], col_lengths[2]) :+ "} {c |}"
+            fin_table[pos,2] = " {ralign " :+ strofreal(col_lengths[2]) :+ ":" :+ substr(fin_table[pos,2], 1, col_lengths[2]) :+ "} {c |}"
           }
 
         /* Statistics */
