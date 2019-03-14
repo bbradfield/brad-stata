@@ -2675,7 +2675,7 @@ mata:
                   }
                 }
 
-              /* Rehsaping & Placing */
+              /* Reshaping & Placing */
 
                 strings = (!miss :* strings) :+ (miss :* ".")
 
@@ -3100,6 +3100,8 @@ mata:
         {
           /* Creating Results Table */
 
+            formats = bd.vi[i].binary ? format_i : format_c
+
             sort_order = bd.vi[i].results.sort_order
 
             vars = cols(bd.vi[i].answers)
@@ -3115,45 +3117,28 @@ mata:
             {
               /* Statistic */
 
+                symbol = bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%"
+
                 if(bd.si.name[j] != "ci")
                 {
                   values = getResults(bd.vi[i].results, bd.si.name[j])
 
-                  if(bd.vi[i].binary)
-                  {
-                    if(bd.si.percent[j]) values = values :* 100
+                  if(bd.vi[i].binary & bd.si.percent[j]) values = values :* 100
 
-                    strings = strofreal(values, format_i[j]) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")
-                  }
-                  else
-                  {
-                    strings = strofreal(values, format_c[j])
-                  }
+                  strings = bd.si.notation[1,j] :+ strofreal(values, formats[j]) :+ symbol :+ bd.si.notation[2,j]
 
-                  strings = bd.si.notation[1,j] :+ strings :+ bd.si.notation[2,j]
-
-                  pos = (values :!= .)
+                  miss = (values :== .)
                 }
                 else
                 {
                   values1 = getResults(bd.vi[i].results, "lci")
                   values2 = getResults(bd.vi[i].results, "uci")
 
-                  if(bd.vi[i].binary)
-                  {
-                    if(bd.si.percent[j]) { values1 = values1 :* 100; values2 = values2 :* 100; }
+                  if(bd.vi[i].binary & bd.si.percent[j]) { values1 = values1 :* 100; values2 = values2 :* 100; }
 
-                    strings = strofreal(values1, format_i[j]) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%") :+ bd.si.ci_separator
-                    strings = strings :+ strofreal(values2, format_i[j]) :+ (bd.vi[i].binary * bd.si.percent[j] * bd.si.symbol[j] * "%")
-                  }
-                  else
-                  {
-                    strings = strofreal(values1, format_c[j]) :+ bd.si.ci_separator :+ strofreal(values2, format_c[j])
-                  }
+                  strings = bd.si.notation[1,j] :+ strofreal(values1, formats[j]) :+ symbol :+ bd.si.ci_separator :+ strofreal(values2, formats[j]) :+ symbol :+ bd.si.notation[2,j]
 
-                  strings = bd.si.notation[1,j] :+ strings :+ bd.si.notation[2,j]
-
-                  pos = (values1 :!= .)
+                  miss = (values1 :== .)
                 }
 
               /* P-Values - Stars */
@@ -3192,7 +3177,9 @@ mata:
                   }
                 }
 
-              /* Rehsaping & Placing */
+              /* Reshaping & Placing */
+
+                strings = (!miss :* strings) :+ (miss :* ".")
 
                 pos = rangex(j, groups, stats)
 
