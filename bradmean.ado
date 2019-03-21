@@ -1074,18 +1074,28 @@ mata:
         oi.levels = st_matrix(matrow)'
         oi.freqs  = st_matrix(matcell)'
 
-        varlab = st_varvaluelabel(oi.name)
+        vallab = st_varvaluelabel(oi.name)
 
-        if(varlab != "")
+        if(vallab != "")
         {
           oi.labels = st_vlmap(st_varvaluelabel(oi.name), oi.levels)
           if(oi.name != oi.varlist) oi.labels = strtrim(substr(oi.labels, strpos(oi.labels, " ") :+ 1))
+        }
+        else
+        {
+          oi.labels = strofreal(oi.levels)
+          bd.opt.over.legend = 0
         }
 
         pos = selectindex(oi.labels :== "")
         if(cols(pos) > 0) oi.labels[pos] = "_over_" :+ strofreal(oi.levels[pos])
 
       /* Cleaning Options */
+
+        if(cols(oi.levels) > 167)
+        {
+          bd.opt.test.individual = bd.opt.test.t_individual = bd.opt.test.f_individual = 0
+        }
 
         if(cols(oi.levels) > 2 & bd.opt.test.t_overall)
         {
@@ -1753,7 +1763,7 @@ mata:
         res.sort_order = range(1, vars, 1)
 
         res.ovr_statistic = res.ovr_pvalue = J(1, vars, .)
-        res.ind_statistic = res.ind_pvalue = J(factorial(lvls)/(2 * factorial(lvls - 2)), vars, .)
+        if(bd.opt.test.individual) res.ind_statistic = res.ind_pvalue = J(factorial(lvls)/(2 * factorial(lvls - 2)), vars, .)
 
       /* Defining Commands */
 
@@ -1976,7 +1986,7 @@ mata:
         res.sort_order = range(1, vars, 1)
 
         res.ovr_statistic = res.ovr_pvalue = J(1, vars, .)
-        res.ind_statistic = res.ind_pvalue = J(factorial(lvls)/(2 * factorial(lvls - 2)), vars, .)
+        if(bd.opt.test.individual) res.ind_statistic = res.ind_pvalue = J(factorial(lvls)/(2 * factorial(lvls - 2)), vars, .)
 
       /* Defining Commands */
 
