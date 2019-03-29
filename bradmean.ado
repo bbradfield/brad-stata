@@ -1030,7 +1030,7 @@ mata:
 
       /* Generating Variable */
 
-        if(cols(oi.varlist) == 1 & st_isnumvar(oi.varlist))
+        if(cols(oi.varlist) == 1 & st_isnumvar(oi.varlist[1]))
         {
           oi.name = oi.varlist
 
