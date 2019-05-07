@@ -507,8 +507,8 @@ mata:
 
       if(errcode == 908)
       {
-        errprintf("{error:data not set up for svy, use {helpb svyset}}\n")
-        exit(119)
+        errprintf("{error:matsize too small}\n")
+        exit(908)
       }
 
       exit(error(errcode))
@@ -1767,7 +1767,8 @@ mata:
                   if(bd.opt.test.f_overall | bd.opt.test.f_individual)
                   {
                     term = ("(" :+ (("[" :+ vi.varlist[i] :+ "]") :+ strofreal(test_num[test_pos1,1])) :+ " == " :+ (("[" :+ vi.varlist[i] :+ "]") :+ strofreal(test_num[test_pos1,2])) :+ ")")'
-                    rc   = _stata("test " + invtokens(term) + ", mtest(" + bd.opt.test.f_mtest + ")", 1)
+
+                    checkerr(rc = _stata("test " + invtokens(term) + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
 
                     if(bd.opt.test.f_overall)
                     {
@@ -2024,7 +2025,8 @@ mata:
                   for(i=vars; i; i--)
                   {
                     term = ("(" :+ (("[" :+ varlist[i] :+ "]") :+ strofreal(test_num[test_pos1,1])) :+ " == " :+ (("[" :+ varlist[i] :+ "]") :+ strofreal(test_num[test_pos1,2])) :+ ")")'
-                    rc   = _stata("test " + invtokens(term) + ", mtest(" + bd.opt.test.f_mtest + ")", 1)
+
+                    checkerr(rc = _stata("test " + invtokens(term) + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
 
                     if(bd.opt.test.f_overall)
                     {
