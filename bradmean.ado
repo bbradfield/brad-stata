@@ -106,9 +106,9 @@ version 14.0
       *
     ];
 
-    if(`round'  > 0 & `round'  < 7) sreturn local round  = `round';
-    if(`roundc' > 0 & `roundc' < 7) sreturn local roundc = `roundc';
-    if(`roundi' > 0 & `roundi' < 7) sreturn local roundi = `roundi';
+    if(`round'  >= 0 & `round'  <= 7) sreturn local round  = `round';
+    if(`roundc' >= 0 & `roundc' <= 7) sreturn local roundc = `roundc';
+    if(`roundi' >= 0 & `roundi' <= 7) sreturn local roundi = `roundi';
 
     if("`pct'"  != "") sreturn local percent = 1;
     if("`npct'" != "") sreturn local percent = 0;
