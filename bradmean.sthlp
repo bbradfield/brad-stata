@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.5.4  12march2019}{...}
+{* *! version 1.6.0  7may2019}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -77,7 +77,7 @@
 {phang}
 {opth test(string)} has the following options:
 
-{p2colset 8 26 27 8}{p2col:{opt chi:2}} display Chi2 p-values for categorical variables. When data is {help svyset}, an adjusted Wald F-test is used instead{p_end}
+{p2colset 8 26 27 8}{p2col:{opt chi:2}} display Chi2 p-values for categorical variables. When data is {help svyset}, a default-corrected Pearson F-test is used instead{p_end}
 {p2colset 8 26 27 8}{p2col:{opth ttest(string)}} display t-test p-values for {opt over:all} comparisons (only applies when there are 2 groups), {opt ind:ividual} comparisons, or {opt all} for both overall and individual{p_end}
 {p2colset 8 26 27 8}{p2col:{opth ftest(string)}} display adjusted Wald F-test p-values for {opt over:all} comparisons, {opt ind:ividual} comparisons, or {opt all} for both overall and individual. {opth mtest(string)} allows adjustments for multiple comparisons using {opt b:onferroni}, {opt h:olm}, or {opt s:idak}{p_end}
 {p2colset 8 26 27 8}{p2col:{opth star:s(numlist)}} creates up to 3 significance stars for overall p-values less than {it:{help numlist}} containing 0-3 values. Leaving {it:{help numlist}} empty defaults to p < 0.05 and p < 0.01{p_end}
@@ -93,7 +93,7 @@
 
 {p2colset 8 23 24 8}{p2col:{opt xi}} enable both xi value and xi variable labels{p_end}
 {p2colset 8 23 24 8}{p2col:{opt xival:s}} enable xi value labels (default is {bf:ON}){p_end}
-{p2colset 8 23 24 8}{p2col:{opt xivar:s}} enable xi variable labels (default is {bf:OFF}){p_end}
+{p2colset 8 23 24 8}{p2col:{opt xivar:s}} enable xi variable labels (default is {bf:ON}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt series}} enable both series value and series variable labels{p_end}
 {p2colset 8 23 24 8}{p2col:{opt seriesval:s}} enable series value labels (default is {bf:OFF}){p_end}
 {p2colset 8 23 24 8}{p2col:{opt seriesvar:s}} enable series variable labels (default is {bf:OFF}){p_end}
