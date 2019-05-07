@@ -487,6 +487,33 @@ mata:
       return(ostrings)
     }
 
+  /* function : checkerr() */
+
+    void function checkerr(`Integer' errcode)
+    {
+      if(errcode == 0) return
+
+      if(errcode == 102)
+      {
+        errprintf("{error:no numeric variables specified}\n")
+        exit(102)
+      }
+
+      if(errcode == 119)
+      {
+        errprintf("{error:data not set up for svy, use {helpb svyset}}\n")
+        exit(119)
+      }
+
+      if(errcode == 908)
+      {
+        errprintf("{error:data not set up for svy, use {helpb svyset}}\n")
+        exit(119)
+      }
+
+      exit(error(errcode))
+    }
+
   /* function : inlist() */
 
     `RealMat' inlist(`DataMat' haystack,
@@ -887,19 +914,11 @@ mata:
 
         if(weight.survey)
         {
-          rc = _stata("_svy_newrule", 1)
+          checkerr(rc = _stata("_svy_newrule", 1))
 
-          if(rc != 0)
-          {
-            errprintf("{error:data not set up for svy, use {helpb svyset}}\n")
-            exit(119)
-          }
-          else
-          {
-            rc = _stata("svymarkout " + st_local("touse"), 1)
+          checkerr(rc = _stata("svymarkout " + st_local("touse"), 1))
 
-            if(weight.subpop != "") rc = _stata("markout " + st_local("touse") + " " + weight.subpop, 1)
-          }
+          if(weight.subpop != "") checkerr(rc = _stata("markout " + st_local("touse") + " " + weight.subpop, 1))
         }
     }
 
@@ -1038,7 +1057,7 @@ mata:
 
             if((vars = length(bd.vi[i].varlist)) == 0) { sel[i] = 0; continue; }
 
-            if(!bd.opt.over.miss) rc = _stata("markout " + st_local("touse") + " " + invtokens(bd.vi[i].varlist), 1)
+            if(!bd.opt.over.miss) checkerr(rc = _stata("markout " + st_local("touse") + " " + invtokens(bd.vi[i].varlist), 1))
 
           /* Type - XI */
 
@@ -1124,6 +1143,8 @@ mata:
       /* Selecting Terms */
 
         bd.vi = bd.vi[selectindex(sel)]
+
+        if(length(bd.vi) == 0) checkerr(102)
     }
 
   /* function : initOverInfo() */
@@ -1145,7 +1166,7 @@ mata:
 
       /* Marking Out Overlist */
 
-        rc = _stata("markout " + st_local("touse") + " " + invtokens(bd.oi.varlist) + ", strok", 1)
+        checkerr(rc = _stata("markout " + st_local("touse") + " " + invtokens(bd.oi.varlist) + ", strok", 1))
 
       /* Generating Variables */
 
@@ -1162,16 +1183,16 @@ mata:
           group_num  = st_tempname()
           group_str  = st_tempname()
 
-          rc = _stata("egen    " + group_num + " = group("  + st_local("over") + ") if " + st_local("touse"), 1)
-          rc = _stata("egen    " + group_str + " = concat(" + st_local("over") + ") if " + st_local("touse") + `", decode punct(", ")"', 1)
-          rc = _stata("replace " + group_str + " = string(" + group_num + `", "%4.0f""' + `") + " " + "' + group_str + " if " + st_local("touse"), 1)
-          rc = _stata("encode  " + group_str + ", generate(" + bd.oi.name + ")", 1)
-          rc = _stata("drop    " + group_num + " " + group_str, 1)
+          checkerr(rc = _stata("egen    " + group_num + " = group("  + st_local("over") + ") if " + st_local("touse"), 1))
+          checkerr(rc = _stata("egen    " + group_str + " = concat(" + st_local("over") + ") if " + st_local("touse") + `", decode punct(", ")"', 1))
+          checkerr(rc = _stata("replace " + group_str + " = string(" + group_num + `", "%4.0f""' + `") + " " + "' + group_str + " if " + st_local("touse"), 1))
+          checkerr(rc = _stata("encode  " + group_str + ", generate(" + bd.oi.name + ")", 1))
+          checkerr(rc = _stata("drop    " + group_num + " " + group_str, 1))
         }
 
       /* Getting Levels */
 
-        rc = _stata("tab " + bd.oi.name + ", matcell(" + matcell + ") matrow(" + matrow + ")", 1)
+        checkerr(rc = _stata("tab " + bd.oi.name + ", matcell(" + matcell + ") matrow(" + matrow + ")", 1))
 
         bd.oi.levels = st_matrix(matrow)'
         bd.oi.freqs  = st_matrix(matcell)'
@@ -1203,15 +1224,30 @@ mata:
           errprintf("{error:Only 1 level of over, treating as {helpb if}}\n")
         }
 
-        if(len > 167 & bd.opt.test.individual)
+        if(bd.opt.test.individual)
         {
-          bd.opt.test.overall = bd.opt.test.f_overall = 1
-          bd.opt.test.individual = 0
+          if(len > 167)
+          {
+            bd.opt.test.overall = bd.opt.test.f_overall = 1
+            bd.opt.test.individual = 0
 
-          errprintf("{error:Individual testing only allows up to 167 levels}\n")
+            errprintf("{error:Individual testing only allows up to 167 levels}\n")
+          }
+
+          if(bd.opt.test.scripts != .)
+          {
+            if(len > 18)
+            {
+              bd.opt.test.scripts = .
+
+              errprintf("{error:Scripts available only up to 18 levels}\n")
+            }
+            else
+            {
+              bd.opt.test.letters = bd.opt.test.letters[1..len]
+            }
+          }
         }
-
-        bd.opt.test.letters = bd.opt.test.letters[1..len]
     }
 
   /* function : initStatInfo() */
@@ -1482,7 +1518,7 @@ mata:
 
             if(dosd)
             {
-              rc = _stata("estat sd", 1)
+              checkerr(rc = _stata("estat sd", 1))
 
               vi.res.sd[i]  = st_matrix("r(sd)")
               vi.res.var[i] = st_matrix("r(variance)")
@@ -1493,7 +1529,7 @@ mata:
 
           if(dotab)
           {
-            rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2], 1)
+            checkerr(rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2], 1))
             mat_results = st_matrix("r(StatTotal)")
 
             if(vi.binary) vi.res.nyes = mat_results[1,.]
@@ -1577,7 +1613,7 @@ mata:
 
           rc = _stata(cmd_mean[1] + vi.term + cmd_mean[2], 1)
 
-          if(rc != 0) return(res)
+          if(rc != 0) return
 
           mat_results = st_matrix("r(table)")
 
@@ -1593,7 +1629,7 @@ mata:
 
           if(dosd)
           {
-            rc = _stata("estat sd", 1)
+            checkerr(rc = _stata("estat sd", 1))
 
             vi.res.sd  = st_matrix("r(sd)")
             vi.res.var = st_matrix("r(variance)")
@@ -1603,7 +1639,7 @@ mata:
 
           if(dotab)
           {
-            rc = _stata(cmd_count[1] + vi.term + cmd_count[2], 1)
+            checkerr(rc = _stata(cmd_count[1] + vi.term + cmd_count[2], 1))
             mat_results = st_matrix("r(StatTotal)")
 
             vi.res.nyes = mat_results[1,.]
@@ -1717,7 +1753,7 @@ mata:
 
               if(dosd)
               {
-                rc = _stata("estat sd", 1)
+                checkerr(rc = _stata("estat sd", 1))
 
                 vi.res.sd[over_pos,i]  = st_matrix("r(sd)")'
                 vi.res.var[over_pos,i] = st_matrix("r(variance)")'
@@ -1805,7 +1841,7 @@ mata:
 
               if(dosd)
               {
-                rc = _stata("estat sd", 1)
+                checkerr(rc = _stata("estat sd", 1))
 
                 vi.res.sd[groups,i]  = st_matrix("r(sd)")
                 vi.res.var[groups,i] = st_matrix("r(variance)")
@@ -1816,7 +1852,7 @@ mata:
 
           if(dotab)
           {
-            rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2] + cmd_count[3], 1)
+            checkerr(rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2] + cmd_count[3], 1))
 
             for(j=lvls; j; j--)
             {
@@ -1945,7 +1981,7 @@ mata:
 
             if(dosd)
             {
-              rc = _stata("estat sd", 1)
+              checkerr(rc = _stata("estat sd", 1))
 
               vi.res.sd[over_pos,.]  = colshape(st_matrix("r(sd)"), len)'
               vi.res.var[over_pos,.] = colshape(st_matrix("r(variance)"), len)'
@@ -1955,7 +1991,7 @@ mata:
 
             if(dotab)
             {
-              rc = _stata(cmd_count[1] + vi.term + cmd_count[2] + cmd_count[3], 1)
+              checkerr(rc = _stata(cmd_count[1] + vi.term + cmd_count[2] + cmd_count[3], 1))
 
               for(i=lvls; i; i--)
               {
@@ -2050,15 +2086,15 @@ mata:
                 {
                   if(!bd.opt.weight.survey)
                   {
-                    rc = _stata("tab " + vi.varlist + " " + bd.oi.name + ", chi2", 1)
+                    checkerr(rc = _stata("tab " + vi.varlist + " " + bd.oi.name + ", chi2", 1))
 
                     vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
                     vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
                   }
                   else
                   {
-                    if(bd.opt.weight.subpop != "") rc = _stata("svy, subpop(" + bd.opt.weight.subpop + "): tab " + vi.varlist + " " + bd.oi.name + ", pearson", 1)
-                    else                           rc = _stata("svy: tab " + vi.varlist + " " + bd.oi.name + ", pearson", 1)
+                    if(bd.opt.weight.subpop != "") checkerr(rc = _stata("svy, subpop(" + bd.opt.weight.subpop + "): tab " + vi.varlist + " " + bd.oi.name + ", pearson", 1))
+                    else                           checkerr(rc = _stata("svy: tab " + vi.varlist + " " + bd.oi.name + ", pearson", 1))
 
                     vi.res.ovr_statistic = J(1, vars, st_numscalar("e(F_Pear)"))
                     vi.res.ovr_pvalue    = J(1, vars, st_numscalar("e(p_Pear)"))
@@ -2088,7 +2124,7 @@ mata:
 
               if(dosd)
               {
-                rc = _stata("estat sd", 1)
+                checkerr(rc = _stata("estat sd", 1))
 
                 vi.res.sd[groups,.]  = st_matrix("r(sd)")
                 vi.res.var[groups,.] = st_matrix("r(variance)")
