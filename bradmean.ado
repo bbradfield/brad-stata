@@ -1113,15 +1113,7 @@ mata:
 
               if(vars > 1)
               {
-                if(bd.opt.display.series_values)
-                {
-                  bd.vi[i].answers = insidepar(labels, "[", "]")
-                  if(length(pos = selectindex(bd.vi[i].answers :== "")) > 0) bd.vi[i].answers[pos] = bd.vi[i].varlist[pos]
-                }
-                else
-                {
-                  bd.vi[i].answers = bd.vi[i].varlist
-                }
+                bd.vi[i].answers = bd.opt.display.series_values ? insidepar(labels, "[", "]") : bd.vi[i].varlist
 
                 if(bd.opt.display.series_variables)
                 {
@@ -1138,6 +1130,9 @@ mata:
                 bd.vi[i].question = bd.opt.display.series_variables ? labels[1] : bd.vi[i].varlist
                 bd.vi[i].answers  = bd.opt.display.series_variables ? labels[1] : bd.vi[i].varlist
               }
+
+              if(bd.vi[i].question == "") bd.vi[i].question = bd.vi[i].term
+              if(length(pos = selectindex(bd.vi[i].answers :== "")) > 0) bd.vi[i].answers[pos] = bd.vi[i].varlist[pos]
         }
 
       /* Selecting Terms */
