@@ -1454,7 +1454,7 @@ mata:
   /* function : calculateSeriesNoOver() */
 
     void function calculateSeriesNoOver(struct bradmean scalar bd,
-                                        struct varInfo scalar vi)
+                                        struct varInfo  scalar vi)
     {
       `Integer' vars, groups
       `Boolean' dosd, dotab
@@ -1567,7 +1567,7 @@ mata:
   /* function : calculateXiNoOver() */
 
     void function calculateXiNoOver(struct bradmean scalar bd,
-                                    struct varInfo scalar vi)
+                                    struct varInfo  scalar vi)
     {
       `Integer' vars, groups
       `Boolean' dosd, dotab
@@ -1677,7 +1677,7 @@ mata:
   /* function : calculateSeriesOver() */
 
     void function calculateSeriesOver(struct bradmean scalar bd,
-                                      struct varInfo scalar vi)
+                                      struct varInfo  scalar vi)
     {
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab
@@ -1908,7 +1908,7 @@ mata:
   /* function : calculateXiOver() */
 
     void function calculateXiOver(struct bradmean scalar bd,
-                                  struct varInfo scalar vi)
+                                  struct varInfo  scalar vi)
     {
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab
