@@ -8,7 +8,7 @@ version 14.0
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
 **   Version:      1.6.0                                                **
-**   Date:         05/07/2019                                           **
+**   Date:         05/15/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -1180,7 +1180,7 @@ mata:
 
           checkerr(rc = _stata("egen    " + group_num + " = group("  + st_local("over") + ") if " + st_local("touse"), 1))
           checkerr(rc = _stata("egen    " + group_str + " = concat(" + st_local("over") + ") if " + st_local("touse") + `", decode punct(", ")"', 1))
-          checkerr(rc = _stata("replace " + group_str + " = string(" + group_num + `", "%4.0f""' + `") + " " + "' + group_str + " if " + st_local("touse"), 1))
+          checkerr(rc = _stata("replace " + group_str + " = string(" + group_num + `", "%05.0f""' + `") + " " + "' + group_str + " if " + st_local("touse"), 1))
           checkerr(rc = _stata("encode  " + group_str + ", generate(" + bd.oi.name + ")", 1))
           checkerr(rc = _stata("drop    " + group_num + " " + group_str, 1))
         }
