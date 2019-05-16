@@ -1187,7 +1187,7 @@ mata:
 
       /* Getting Levels */
 
-        checkerr(rc = _stata("tab " + bd.oi.name + ", matcell(" + matcell + ") matrow(" + matrow + ")", 1))
+        checkerr(rc = _stata("tab " + bd.oi.name + " if " + st_local("touse") + ", matcell(" + matcell + ") matrow(" + matrow + ")", 1))
 
         bd.oi.levels = st_matrix(matrow)'
         bd.oi.freqs  = st_matrix(matcell)'
