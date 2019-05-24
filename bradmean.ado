@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.1                                                **
-**   Date:         05/24/2019                                           **
+**   Version:      1.6.0                                                **
+**   Date:         05/15/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -3646,19 +3646,16 @@ mata:
             str_formats = bd.vi[i].binary ? ("%32." :+ strofreal(bd.si.roundi) :+ "f" :+ (bd.si.comma :* "c")) : ("%32." :+ strofreal(bd.si.roundc) :+ "f" :+ (bd.si.comma :* "c"))
             sym         = bd.vi[i].binary :* bd.si.percent :* bd.si.symbol :* "%"
 
-            rpos = rpos[2] + 1, rpos[2] + ((vars == 1 & terms == 1) ? 0 : vars) + (vars * groups)
+            rpos = rpos[2] + 1, rpos[2] + vars + (vars * groups)
 
           /* Variable Names */
 
-            if(vars == 1 & terms == 1)     cur_table = vec(J(1, vars, labels))
-            else if(terms == 1)            cur_table = vec(bd.vi[i].answers \ J(1, vars, labels))
+            if(terms == 1)                 cur_table = vec(bd.vi[i].answers \ J(1, vars, labels))
             else if(bd.vi[i].type == "xi") cur_table = vec((bd.vi[i].varlist :+ " == " :+ strofreal(bd.vi[i].levels)) \ J(1, vars, labels))
             else                           cur_table = vec(bd.vi[i].varlist \ J(1, vars, labels))
 
             B.put_string(rpos[1], 1, cur_table)
-
-            if(vars == 1 & terms == 1) B.set_fmtid(rpos, 1, fmt_question)
-            else                       B.set_fmtid(rpos, 1, fmt_answer)
+            B.set_fmtid(rpos, 1, fmt_answer)
 
           /* Statistics */
 
@@ -3701,14 +3698,12 @@ mata:
 
                 if(!haspost[j] & bd.si.name[j] != "ci")
                 {
-                  if(vars != 1 | terms != 1) values1 = vec(J(1, vars, .) \ values1)
-                  B.put_number(rpos[1], cpos, values1)
+                  B.put_number(rpos[1], cpos, vec(J(1, vars, .) \ values1))
                 }
                 else
                 {
                   cur_table = ((values1 :!= .) :* cur_table) :+ ((values1 :== .) :* ".")
-                  if(vars != 1 | terms != 1) cur_table = vec(J(1, vars, "") \ cur_table)
-                  B.put_string(rpos[1], cpos, cur_table)
+                  B.put_string(rpos[1], cpos, vec(J(1, vars, "") \ cur_table))
                 }
 
                 if(bd.vi[i].binary) B.set_fmtid(rpos, (cpos,cpos), fmt_stats_i[j])
@@ -3824,7 +3819,7 @@ mata:
 
         rbound  = rbound, rpos[2]
         rpos    = rbound
-        rpos[1] = rpos[1] + (vars != 1 | terms != 1) + (p_values > 0)
+        rpos[1] = rpos[1] + 1 + (p_values > 0)
 
       /* Formatting - P-Values */
 
@@ -3854,20 +3849,17 @@ mata:
 
       /* Formatting - By Variable */
 
-        if(vars != 1 & terms != 1)
+        cur_table = J(1, cbound[2] - cbound[1], "")
+
+        for(i=rpos[1]; i<=rpos[2]; i++)
         {
-          cur_table = J(1, cbound[2] - cbound[1], "")
+          B.set_fmtid(i, 1, fmt_question)
 
-          for(i=rpos[1]; i<=rpos[2]; i++)
-          {
-            B.set_fmtid(i, 1, fmt_question)
+          B.put_string(i, 2, cur_table)
 
-            B.put_string(i, 2, cur_table)
+          i = i + groups
 
-            i = i + groups
-
-            B.set_bottom_border((i,i), cbound, "thin")
-          }
+          B.set_bottom_border((i,i), cbound, "thin")
         }
 
       /* Formatting - General */
