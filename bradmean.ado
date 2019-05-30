@@ -1571,7 +1571,7 @@ mata:
     {
       `Integer' vars, groups
       `Boolean' dosd, dotab
-      `Tokens'  cmd_mean, cmd_count
+      `Tokens'  cmd_mean, cmd_count, varlist
       `RealMat' mat_results, temp_se
       `Pos'     sort_order
       `Integer' rc, i
@@ -1610,6 +1610,7 @@ mata:
 
           if(rc != 0) return
 
+          varlist     = tokens(st_global("e(varlist)"))
           mat_results = st_matrix("r(table)")
 
           vi.res.mean = mat_results[1,.]
@@ -1672,6 +1673,8 @@ mata:
           vi.res.t    = vi.res.t[sort_order]
           vi.res.df   = vi.res.df[sort_order]
         }
+
+      rc = _stata("drop " + invtokens(varlist))
     }
 
   /* function : calculateSeriesOver() */
@@ -1912,7 +1915,7 @@ mata:
     {
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab
-      `Tokens'  cmd_mean, cmd_count, term
+      `Tokens'  cmd_mean, cmd_count, term, varlist
       `RealMat' mat_results, temp_se
       `RealRow' over_num
       `Pos'     over_pos
@@ -2162,6 +2165,8 @@ mata:
           vi.res.ind_statistic = vi.res.ind_statistic[.,sort_order]
           vi.res.ind_pvalue    = vi.res.ind_pvalue[.,sort_order]
         }
+
+      rc = _stata("drop " + invtokens(varlist))
     }
 
 /*======================================================================*/
