@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.0                                                **
-**   Date:         05/15/2019                                           **
+**   Version:      1.6.1                                                **
+**   Date:         06/04/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -1191,9 +1191,10 @@ mata:
 
         bd.oi.levels = st_matrix(matrow)'
         bd.oi.freqs  = st_matrix(matcell)'
-        bd.oi.labels = (st_varvaluelabel(bd.oi.name) != "") ? st_vlmap(st_varvaluelabel(bd.oi.name), bd.oi.levels) : "_over_" :+ strofreal(bd.oi.levels)
+        bd.oi.labels = (st_varvaluelabel(bd.oi.name) != "" & bd.opt.over.labels) ? st_vlmap(st_varvaluelabel(bd.oi.name), bd.oi.levels) : "_over_" :+ strofreal(bd.oi.levels)
 
-        if(bd.oi.name != bd.oi.varlist) bd.oi.labels = substr(bd.oi.labels, strpos(bd.oi.labels, " ") :+ 1)
+        if(bd.oi.name != bd.oi.varlist)                        bd.oi.labels = substr(bd.oi.labels, strpos(bd.oi.labels, " ") :+ 1)
+        if(length(pos = selectindex(bd.oi.labels :== "")) > 0) bd.oi.labels[pos] = "_over_" :+ strofreal(bd.oi.levels[pos])
 
       /* Cleaning Options */
 
@@ -2258,11 +2259,14 @@ mata:
 
     `StringCol' getLegend(struct overInfo scalar oi)
     {
-      `StringMat' legend
+      `StringMat' labels, legend
+
+      labels = (st_varvaluelabel(oi.name) != "") ? st_vlmap(st_varvaluelabel(oi.name), oi.levels) : strofreal(oi.levels)
+      if(length(pos = selectindex(labels :== "")) > 0) labels[pos] = strofreal(oi.levels[pos])
 
       legend = "_over_" :+ strofreal(oi.levels)'
       legend = "{lalign " :+ strofreal(max(udstrlen(legend))) :+ ":" :+ legend :+ "} {c |} "
-      legend = legend :+ char(34) :+ invtokens(oi.varlist, ", ") :+ char(34) :+ " = " :+ char(34) :+ oi.labels' :+ char(34)
+      legend = legend :+ char(34) :+ invtokens(oi.varlist, ", ") :+ char(34) :+ " = " :+ char(34) :+ labels' :+ char(34)
 
       return(legend)
     }
