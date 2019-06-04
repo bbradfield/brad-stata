@@ -3425,7 +3425,7 @@ mata:
                                 class  xl      scalar B,
                                 `Integer'             row)
     {
-      `Integer'   stats, terms, lvls, groups, vars, len
+      `Integer'   stats, terms, lvls, groups, vars, single, len
       `Boolean'   p_overall, p_individual, p_stars, p_scripts, p_values
       `RealRow'   haspost
       `Integer'   font, font_bold, fmt_title, fmt_whitespace, fmt_header, fmt_question, fmt_answer, fmt_pval, fmt_pstat
@@ -3445,6 +3445,7 @@ mata:
         stats  = length(bd.si.name)
         terms  = length(bd.vi)
         groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
+        single = terms == 1 & length(bd.vi[1].answers) == 1
 
         p_stars      = bd.opt.test.overall    * anyof(bd.si.stars, 1)   * (length(bd.opt.test.stars) > 0)
         p_scripts    = bd.opt.test.individual * anyof(bd.si.scripts, 1) * (bd.opt.test.scripts != .)
@@ -3492,10 +3493,17 @@ mata:
           B.fmtid_set_horizontal_align(fmt_question, "left")
           B.fmtid_set_fill_pattern(fmt_question, "solid", bd.opt.excel.color[2])
 
-          fmt_answer = B.add_fmtid()
-          B.fmtid_set_fontid(fmt_answer, font_bold)
-          B.fmtid_set_horizontal_align(fmt_answer, "right")
-          B.fmtid_set_fill_pattern(fmt_answer, "solid", bd.opt.excel.color[2])
+          if(single)
+          {
+            fmt_answer = fmt_question
+          }
+          else
+          {
+            fmt_answer = B.add_fmtid()
+            B.fmtid_set_fontid(fmt_answer, font_bold)
+            B.fmtid_set_horizontal_align(fmt_answer, "right")
+            B.fmtid_set_fill_pattern(fmt_answer, "solid", bd.opt.excel.color[2])
+          }
 
         /* P-Values */
 
@@ -3655,11 +3663,12 @@ mata:
             str_formats = bd.vi[i].binary ? ("%32." :+ strofreal(bd.si.roundi) :+ "f" :+ (bd.si.comma :* "c")) : ("%32." :+ strofreal(bd.si.roundc) :+ "f" :+ (bd.si.comma :* "c"))
             sym         = bd.vi[i].binary :* bd.si.percent :* bd.si.symbol :* "%"
 
-            rpos = rpos[2] + 1, rpos[2] + vars + (vars * groups)
+            rpos = rpos[2] + 1, rpos[2] + (!single * vars) + (vars * groups)
 
           /* Variable Names */
 
-            if(terms == 1)                 cur_table = vec(bd.vi[i].answers \ J(1, vars, labels))
+            if(single == 1)                cur_table = labels
+            else if(terms == 1)            cur_table = vec(bd.vi[i].answers \ J(1, vars, labels))
             else if(bd.vi[i].type == "xi") cur_table = vec((bd.vi[i].varlist :+ " == " :+ strofreal(bd.vi[i].levels)) \ J(1, vars, labels))
             else                           cur_table = vec(bd.vi[i].varlist \ J(1, vars, labels))
 
@@ -3707,12 +3716,12 @@ mata:
 
                 if(!haspost[j] & bd.si.name[j] != "ci")
                 {
-                  B.put_number(rpos[1], cpos, vec(J(1, vars, .) \ values1))
+                  B.put_number(rpos[1], cpos, vec(J(!single, vars, .) \ values1))
                 }
                 else
                 {
                   cur_table = ((values1 :!= .) :* cur_table) :+ ((values1 :== .) :* ".")
-                  B.put_string(rpos[1], cpos, vec(J(1, vars, "") \ cur_table))
+                  B.put_string(rpos[1], cpos, vec(J(!single, vars, "") \ cur_table))
                 }
 
                 if(bd.vi[i].binary) B.set_fmtid(rpos, (cpos,cpos), fmt_stats_i[j])
@@ -3773,6 +3782,8 @@ mata:
 
                   /* Adding to Excel */
 
+                    if(single) cur_table = cur_table[2..(groups + 1),.]
+
                     tpos = 2 + stats
 
                     for(j=1; j<=p_values; j++)
@@ -3814,6 +3825,8 @@ mata:
                   }
 
                 /* Adding to Excel */
+
+                  if(single) cur_table = cur_table[2..(groups + 1),.]
 
                   tpos = 2 + stats + bd.opt.test.statistic
 
@@ -3858,17 +3871,20 @@ mata:
 
       /* Formatting - By Variable */
 
-        cur_table = J(1, cbound[2] - cbound[1], "")
-
-        for(i=rpos[1]; i<=rpos[2]; i++)
+        if(!single)
         {
-          B.set_fmtid(i, 1, fmt_question)
+          cur_table = J(1, cbound[2] - cbound[1], "")
 
-          B.put_string(i, 2, cur_table)
+          for(i=rpos[1]; i<=rpos[2]; i++)
+          {
+            B.set_fmtid(i, 1, fmt_question)
 
-          i = i + groups
+            B.put_string(i, 2, cur_table)
 
-          B.set_bottom_border((i,i), cbound, "thin")
+            i = i + groups
+
+            B.set_bottom_border((i,i), cbound, "thin")
+          }
         }
 
       /* Formatting - General */
