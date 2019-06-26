@@ -7,8 +7,8 @@ version 14.0
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.1                                                **
-**   Date:         06/04/2019                                           **
+**   Version:      1.6.2                                                **
+**   Date:         06/26/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -327,7 +327,7 @@ mata:
 
       /* Format - Notation */
       `RealRow'   comma, percent, symbol
-      `StringRow' notation
+      `StringMat' notation
 
       /* Format - P-Values */
       `RealRow'   stars, scripts
@@ -368,7 +368,7 @@ mata:
     }
 
 /*======================================================================*/
-/*   Mata Functions - general                                           */
+/*   Mata Functions - General                                           */
 /*======================================================================*/
 
   /* function : abbrevx() */
@@ -622,7 +622,7 @@ mata:
     }
 
 /*======================================================================*/
-/*   Mata Functions - Initializing Bradmean                              */
+/*   Mata Functions - Initializing Bradmean                             */
 /*======================================================================*/
 
   /* function : initOptions() */
@@ -2262,6 +2262,8 @@ mata:
       `StringMat' labels, legend
 
       labels = (st_varvaluelabel(oi.name) != "") ? st_vlmap(st_varvaluelabel(oi.name), oi.levels) : strofreal(oi.levels)
+
+      if(oi.name != oi.varlist)                        labels      = substr(labels, strpos(labels, " ") :+ 1)
       if(length(pos = selectindex(labels :== "")) > 0) labels[pos] = strofreal(oi.levels[pos])
 
       legend = "_over_" :+ strofreal(oi.levels)'
@@ -2501,7 +2503,7 @@ mata:
                 if(p_stars & bd.si.stars[j])
                 {
                   len = length(bd.opt.test.stars)
-                  for(k=len; k; k--) temp_table = temp_table :+ ((bd.vi[i].res.ovr_pvalue :< bd.opt.test.stars[k]) :* "*")
+                  for(k=len; k; k--) temp_table = temp_table :+ ((bd.vi[i].res.ovr_pvalue :< bd.opt.test.stars[k]) :* uchar(735))
                 }
 
               /* P-Values - Scripts */
@@ -2806,7 +2808,7 @@ mata:
                 if(p_stars & bd.si.stars[j])
                 {
                   len = length(bd.opt.test.stars)
-                  for(k=len; k; k--) temp_table = temp_table :+ ((bd.vi[i].res.ovr_pvalue :< bd.opt.test.stars[k]) :* "*")
+                  for(k=len; k; k--) temp_table = temp_table :+ ((bd.vi[i].res.ovr_pvalue :< bd.opt.test.stars[k]) :* uchar(735))
                 }
 
               /* P-Values - Scripts */
@@ -3702,7 +3704,7 @@ mata:
                 if(p_stars & bd.si.stars[j])
                 {
                   len = length(bd.opt.test.stars)
-                  for(k=len; k; k--) cur_table = cur_table :+ ((bd.vi[i].res.ovr_pvalue :< bd.opt.test.stars[k]) :* "*")
+                  for(k=len; k; k--) cur_table = cur_table :+ ((bd.vi[i].res.ovr_pvalue :< bd.opt.test.stars[k]) :* uchar(735))
                 }
 
               /* P-Values - Scripts */
@@ -4282,7 +4284,7 @@ mata:
                 {
                   len = length(bd.opt.test.stars)
 
-                  for(k=len; k; k--) cur_table = cur_table :+ ((bd.vi[i].res.ovr_pvalue' :< bd.opt.test.stars[k]) :* "*")
+                  for(k=len; k; k--) cur_table = cur_table :+ ((bd.vi[i].res.ovr_pvalue' :< bd.opt.test.stars[k]) :* uchar(735))
                 }
 
               /* P-Values - Scripts */
