@@ -2,12 +2,13 @@ d 'bradmean': compute multiple independent means in a single table
 d
 d   Computes multiple independent means in a single table
 d
-d Version 1.6.2
+d Version 1.6.3
 d
-d Distribution-Date: 26jun2019
+d Distribution-Date: 11nov2019
 d
 d Author: Brian Bradfield
 d Support: email bbradfield@rti.org
 d
 f bradmean.ado
 f bradmean.sthlp
+f bradsuite.mata

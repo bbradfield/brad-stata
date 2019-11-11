@@ -3,7 +3,7 @@ d
 d   bradbook
 d   bradmean
 d
-d Distribution-Date: 04jun2019
+d Distribution-Date: 11nov2019
 d
 d Author: Brian Bradfield
 d Support: email bbradfield@rti.org
@@ -12,3 +12,4 @@ f bradbook.ado
 f bradbook.sthlp
 f bradmean.ado
 f bradmean.sthlp
+f bradsuite.mata

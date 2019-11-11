@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.6.2  26jun2019}{...}
+{* *! version 1.6.3  11nov2019}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -17,6 +17,7 @@
 {cmdab:bradmean:}
 [{varlist}]
 {ifin}
+[{it:{help bradmean##weight:weight}}]
 [{cmd:,} {it:options}]
 
 {synoptset 20 tabbed}{...}
@@ -25,6 +26,9 @@
 {syntab:Weight}
 {synopt:{opt svy:}}statistics will be survey weighted{p_end}
 {synopt:{opth sub:pop(varname)}}subpopulation estimation by {it:varname}; {it:varname} must be 0/1{p_end}
+
+{syntab:SE/Cluster}
+{synopt:{opth vce(vcetype)}}{it:vcetype} may be {opt analytic}, {opt cl:uster} {it:clustvar}, {opt boot:strap}, or {opt jack:knife}{p_end}
 
 {syntab:Over}
 {synopt:{opth over(varlist)}}estimation over groups defined by {it:varlist}{p_end}
@@ -41,7 +45,14 @@
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
-{cmd:weights} are allowed; see {help svyset}.{p_end}
+{cmd:svy} weights are allowed; see {help svyset}.{p_end}
+{p 4 6 2}
+{opt vce()} and weights are not allowed with the {opt svy} option.
+{p_end}
+{marker weight}{...}
+{p 4 6 2}
+{opt fweight}s, {opt aweight}s, {opt iweight}s, and {opt pweight}s are
+allowed; see {help weight}.{p_end}
 
 {marker description}{...}
 {title:Description}
@@ -60,6 +71,14 @@
 {phang}
 {opth sub:pop(varname)} specifies that estimates be computed using subpopulation {varname}. {varname} must be 0/1.
 
+{dlgtab:SE/Cluster}
+
+{phang} {opt vce(vcetype)} specifies the type of standard error reported, which includes types that are derived from asymptotic theory ({cmd:analytic}), that allow for intragroup correlation ({cmd:cluster} {it:clustvar}), and that use bootstrap or jackknife methods ({cmd:bootstrap}, {cmd:jackknife}); see {helpb vce_option:[R] {it:vce_option}}.
+
+{pmore}
+{cmd:vce(analytic)}, the default, uses the analytically derived variance
+estimator associated with the sample mean.
+
 {dlgtab:Over}
 
 {phang}
@@ -71,13 +90,14 @@
 {p2colset 8 18 19 8}{p2col:{opt nolab:els}} do not display over labels{p_end}
 {p2colset 8 18 19 8}{p2col:{opt noleg:end}} do not display legend for over groups{p_end}
 {p2colset 8 18 19 8}{p2col:{opt nomi:ss}} do not display groups with no non-missing values{p_end}
+{p2colset 8 18 19 8}{p2col:{opt row}} calculate row percentages for binary variables{p_end}
 {p2colset 8 18 19 8}{p2col:{opt tot:al}} display overall statistics{p_end}
 {p2colset 8 18 19 8}{p2col:{opt group}} display each group size below name (wide only){p_end}
 
 {phang}
 {opth test(string)} has the following options:
 
-{p2colset 8 26 27 8}{p2col:{opt chi:2}} display Chi2 p-values for categorical variables. When data is {help svyset}, a default-corrected Pearson F-test is used instead{p_end}
+{p2colset 8 26 27 8}{p2col:{opt chi:2}} display Chi2 p-values for categorical and binary variables. When data is {help svyset}, a default-corrected Pearson F-test is used instead{p_end}
 {p2colset 8 26 27 8}{p2col:{opth ttest(string)}} display t-test p-values for {opt over:all} comparisons (only applies when there are 2 groups), {opt ind:ividual} comparisons, or {opt all} for both overall and individual{p_end}
 {p2colset 8 26 27 8}{p2col:{opth ftest(string)}} display adjusted Wald F-test p-values for {opt over:all} comparisons, {opt ind:ividual} comparisons, or {opt all} for both overall and individual. {opth mtest(string)} allows adjustments for multiple comparisons using {opt b:onferroni}, {opt h:olm}, or {opt s:idak}{p_end}
 {p2colset 8 26 27 8}{p2col:{opth star:s(numlist)}} creates up to 3 significance stars for overall p-values less than {it:{help numlist}} containing 0-3 values. Leaving {it:{help numlist}} empty defaults to p < 0.05 and p < 0.01{p_end}
