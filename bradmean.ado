@@ -810,7 +810,7 @@ mata:
 
         if(!allof(pos, 0))
         {
-          pos = pos[selectindex(pos :!= 0)]
+          pos = min(pos[selectindex(pos :!= 0)])
 
           termlist = substr(termlist, 1, pos - 1)
         }
