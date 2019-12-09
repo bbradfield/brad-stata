@@ -1,4 +1,4 @@
-version 15.0
+version 15.1
 #delimit;
 include bradsuite.mata, adopath;
 
@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.4                                                **
-**   Date:         11/11/2019                                           **
+**   Version:      1.6.5                                                **
+**   Date:         12/09/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -3899,8 +3899,8 @@ mata:
                 }
                 else
                 {
-                  values1 = getResults(bd.vi[i].res, "lci")' :* (100^(bd.vi[i].binary & bd.si.percent[j]))
-                  values2 = getResults(bd.vi[i].res, "uci")' :* (100^(bd.vi[i].binary & bd.si.percent[j]))
+                  values1 = getResults(bd.vi[i].res, "lci") :* (100^(bd.vi[i].binary & bd.si.percent[j]))
+                  values2 = getResults(bd.vi[i].res, "uci") :* (100^(bd.vi[i].binary & bd.si.percent[j]))
 
                   cur_table = bd.si.notation[1,j] :+ strofreal(values1, str_formats[j]) :+ sym[j] :+ bd.si.ci_separator :+ strofreal(values2, str_formats[j]) :+ sym[j] :+ bd.si.notation[2,j]
                 }
