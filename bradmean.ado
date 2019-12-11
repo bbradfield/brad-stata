@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.5                                                **
-**   Date:         12/09/2019                                           **
+**   Version:      1.6.6                                                **
+**   Date:         12/11/2019                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -915,6 +915,7 @@ mata:
               else
               {
                 bd.vi[i].varlist = bd.vi[i].varlist[selectindex(sel_vars)]
+                vars             = length(bd.vi[i].varlist)
               }
 
             /* Type & Binary */
