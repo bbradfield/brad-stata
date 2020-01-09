@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.6                                                **
-**   Date:         12/11/2019                                           **
+**   Version:      1.6.7                                                **
+**   Date:         01/09/2020                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -97,12 +97,12 @@ include bradsuite.mata, adopath;
   *   05. Getting Results                                    *
   *----------------------------------------------------------*;
 
-    mata: initVarInfo(bd);
-    mata: initOverInfo(bd);
-    mata: initStatInfo(bd);
-    mata: gatherResults(bd);
-    mata: printer(bd);
-    mata: createExcel(bd);
+    timermata: initVarInfo(bd);
+    timermata: initOverInfo(bd);
+    timermata: initStatInfo(bd);
+    timermata: gatherResults(bd);
+    timermata: printer(bd);
+    timer on 8; mata: createExcel(bd);
 
   *----------------------------------------------------------*
   *   06. Cleaning Up                                        *
@@ -1266,7 +1266,7 @@ mata:
     }
 
 /*======================================================================*/
-/*   Mata Functions - Getting Results                                   */
+/*   Mata Functions - Getting Results - General                         */
 /*======================================================================*/
 
   /* function : getResults() */
@@ -1365,36 +1365,75 @@ mata:
       len    = length(bd.vi)
       groups = length(bd.oi.levels)
 
-      if(groups == 0)
-      {
-        for(i=len; i; i--)
+      /* Version 15.1 */
+
+        if(c("version") == 15.1)
         {
-          if(bd.vi[i].type != "xi") calculateSeriesNoOver(bd, bd.vi[i])
-          else                      calculateXiNoOver(bd, bd.vi[i])
+          if(groups == 0)
+          {
+            for(i=len; i; i--)
+            {
+              if(bd.vi[i].type != "xi") calculateSeriesNoOver15(bd, bd.vi[i])
+              else                      calculateXiNoOver15(bd, bd.vi[i])
+            }
+          }
+          else if(!bd.opt.over.row)
+          {
+            for(i=len; i; i--)
+            {
+              if(bd.vi[i].type != "xi") calculateSeriesOverCol15(bd, bd.vi[i])
+              else                      calculateXiOverCol15(bd, bd.vi[i])
+            }
+          }
+          else
+          {
+            for(i=len; i; i--)
+            {
+              if(bd.vi[i].type != "xi") calculateSeriesOverRow15(bd, bd.vi[i])
+              else                      calculateXiOverRow15(bd, bd.vi[i])
+            }
+          }
         }
-      }
-      else if(!bd.opt.over.row)
-      {
-        for(i=len; i; i--)
+
+      /* Version 16.0 */
+
+        if(c("version") == 16)
         {
-          if(bd.vi[i].type != "xi") calculateSeriesOverCol(bd, bd.vi[i])
-          else                      calculateXiOverCol(bd, bd.vi[i])
+          if(groups == 0)
+          {
+            for(i=len; i; i--)
+            {
+              if(bd.vi[i].type != "xi") calculateSeriesNoOver16(bd, bd.vi[i])
+              else                      calculateXiNoOver16(bd, bd.vi[i])
+            }
+          }
+          else if(!bd.opt.over.row)
+          {
+            for(i=len; i; i--)
+            {
+              if(bd.vi[i].type != "xi") calculateSeriesOverCol16(bd, bd.vi[i])
+              else                      calculateXiOverCol16(bd, bd.vi[i])
+            }
+          }
+          else
+          {
+            for(i=len; i; i--)
+            {
+              if(bd.vi[i].type != "xi") calculateSeriesOverRow16(bd, bd.vi[i])
+              else                      calculateXiOverRow16(bd, bd.vi[i])
+            }
+          }
         }
-      }
-      else
-      {
-        for(i=len; i; i--)
-        {
-          if(bd.vi[i].type != "xi") calculateSeriesOverRow(bd, bd.vi[i])
-          else                      calculateXiOverRow(bd, bd.vi[i])
-        }
-      }
     }
 
-  /* function : calculateSeriesNoOver() */
+/*======================================================================*/
+/*   Mata Functions - Calculating Results - Version 15.1                */
+/*======================================================================*/
 
-    void function calculateSeriesNoOver(struct bradmean scalar bd,
-                                        struct varInfo  scalar vi)
+  /* function : calculateSeriesNoOver15() */
+
+    void function calculateSeriesNoOver15(struct bradmean scalar bd,
+                                          struct varInfo  scalar vi)
     {
       `Integer' vars
       `Boolean' dosd, dotab
@@ -1484,10 +1523,10 @@ mata:
         }
     }
 
-  /* function : calculateXiNoOver() */
+  /* function : calculateXiNoOver15() */
 
-    void function calculateXiNoOver(struct bradmean scalar bd,
-                                    struct varInfo  scalar vi)
+    void function calculateXiNoOver15(struct bradmean scalar bd,
+                                      struct varInfo  scalar vi)
     {
       `Integer' vars
       `Boolean' dosd, dotab
@@ -1577,10 +1616,10 @@ mata:
       rc = _stata("drop " + invtokens(varlist))
     }
 
-  /* function : calculateSeriesOverCol() */
+  /* function : calculateSeriesOverCol15() */
 
-    void function calculateSeriesOverCol(struct bradmean scalar bd,
-                                         struct varInfo  scalar vi)
+    void function calculateSeriesOverCol15(struct bradmean scalar bd,
+                                           struct varInfo  scalar vi)
     {
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab, doovr, doind
@@ -1827,10 +1866,10 @@ mata:
         }
     }
 
-  /* function : calculateXiOverCol() */
+  /* function : calculateXiOverCol15() */
 
-    void function calculateXiOverCol(struct bradmean scalar bd,
-                                     struct varInfo  scalar vi)
+    void function calculateXiOverCol15(struct bradmean scalar bd,
+                                       struct varInfo  scalar vi)
     {
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab, doovr, doind
@@ -2088,15 +2127,15 @@ mata:
       rc = _stata("drop " + invtokens(varlist))
     }
 
-  /* function : calculateSeriesOverRow() */
+  /* function : calculateSeriesOverRow15() */
 
-    void function calculateSeriesOverRow(struct bradmean scalar bd,
-                                         struct varInfo  scalar vi)
+    void function calculateSeriesOverRow15(struct bradmean scalar bd,
+                                           struct varInfo  scalar vi)
     {
       `Integer' vars, groups
       `Boolean' dosd, dotab
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, term, varlist
-      `String'  cmd_tab1, matcell
+      `String'  cmd_tab1, matcell, matrow
       `RealMat' mat_results
       `Pos'     pos
       `Integer' rc, i, j
@@ -2131,7 +2170,8 @@ mata:
         /* Tabulate Oneway */
 
           matcell  = st_tempname()
-          cmd_tab1 = "tab " + bd.oi.name + " if e(sample), nolabel matcell(" + matcell + ")"
+          matrow   = st_tempname()
+          cmd_tab1 = "tab " + bd.oi.name + " if e(sample), nolabel matcell(" + matcell + ") matrow(" + matrow + ")"
 
         /* Tabulate Twoway */
 
@@ -2157,17 +2197,17 @@ mata:
 
             mat_results = st_matrix("r(table)")'
             varlist     = tokens(st_global("e(varlist)"))
-            pos         = rangex(2, groups, 2)
 
           /* Observations */
 
             rc = _stata(cmd_tab1, 1)
 
-            vi.res.obs[.,i] = st_matrix(matcell)
+            pos               = st_matrix(matrow)
+            vi.res.obs[pos,i] = st_matrix(matcell)
 
           /* Mean (2) */
 
-            if(st_global("e(over_namelist)") == "0")
+            if(st_global("e(over_nameslist)") == "0")
             {
               vi.res.mean[.,i] = J(groups, 1, 0)
               vi.res.se[.,i]   = J(groups, 1, 0)
@@ -2176,6 +2216,8 @@ mata:
 
               continue
             }
+
+            pos = rangex(2, groups, 2)
 
             vi.res.mean[.,i] = mat_results[pos,1]
             vi.res.se[.,i]   = mat_results[pos,2]
@@ -2253,18 +2295,18 @@ mata:
       rc = _stata("drop " + invtokens(varlist))
     }
 
-  /* function : calculateXiOverRow() */
+  /* function : calculateXiOverRow15() */
 
-    void function calculateXiOverRow(struct bradmean scalar bd,
-                                     struct varInfo  scalar vi)
+    void function calculateXiOverRow15(struct bradmean scalar bd,
+                                       struct varInfo  scalar vi)
     {
       `Integer' vars, groups, len
       `Boolean' dosd, dotab
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, term, varlist
-      `String'  cmd_tab1, matcell
+      `String'  cmd_tab1, matcell, matrow
       `RealMat' mat_results
-      `DataVec' over_name, over_num
-      `Pos'     over_pos
+      `DataVec' over_names, over_num
+      `Pos'     over_pos, pos
       `Integer' rc, i, j
 
       /* Getting Information */
@@ -2295,7 +2337,8 @@ mata:
         /* Tabulate Oneway */
 
           matcell  = st_tempname()
-          cmd_tab1 = "tab " + bd.oi.name + " if e(sample), nolabel matcell(" + matcell + ")"
+          matrow   = st_tempname()
+          cmd_tab1 = "tab " + bd.oi.name + " if e(sample), nolabel matcell(" + matcell + ") matrow(" + matrow + ")"
 
         /* Tabulate Twoway */
 
@@ -2319,7 +2362,7 @@ mata:
 
           mat_results = st_matrix("r(table)")
           varlist     = tokens(st_global("e(varlist)"))
-          over_name   = tokens(st_global("e(over)"))
+          over_names  = tokens(st_global("e(over)"))
           over_num    = tokens(st_global("e(over_labels)"))
           len         = length(over_num)
           over_pos    = J(1, len, .)
@@ -2339,7 +2382,8 @@ mata:
 
           rc = _stata(cmd_tab1, 1)
 
-          vi.res.obs = J(1, vars, st_matrix(matcell))
+          pos               = st_matrix(matrow)
+          vi.res.obs[pos,.] = J(1, vars, st_matrix(matcell))
 
         /* Standard Deviation & Variance */
 
@@ -2409,7 +2453,1027 @@ mata:
           sortResults(bd, vi, 1)
         }
 
-      rc = _stata("drop " + invtokens(over_name))
+      rc = _stata("drop " + invtokens(over_names))
+    }
+
+/*======================================================================*/
+/*   Mata Functions - Calculating Results - Version 16.0                */
+/*======================================================================*/
+
+  /* function : calculateSeriesNoOver16() */
+
+    void function calculateSeriesNoOver16(struct bradmean scalar bd,
+                                          struct varInfo  scalar vi)
+    {
+      `Integer' vars
+      `Boolean' dosd, dotab
+      `Tokens'  cmd_mean, cmd_count
+      `RealMat' mat_results
+      `Integer' rc, i
+
+      /* Getting Information */
+
+        vars = length(vi.answers)
+
+        dosd  = anylist(bd.si.name, ("sd", "var"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+
+      /* Defining Results */
+
+        vi.res.obs = J(1, vars, 0)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(1, vars, .)
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean "
+          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean "
+          else                           cmd_mean = "mean "
+
+          cmd_mean = cmd_mean, (" if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") " + bd.opt.weight.vce)
+
+        /* Count */
+
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save")
+
+      /* Calculating Results */
+
+        for(i=vars; i; i--)
+        {
+          /* Mean */
+
+            rc = _stata(cmd_mean[1] + vi.varlist[i] + cmd_mean[2], 1)
+
+            if(rc != 0) continue
+
+            mat_results = st_matrix("r(table)")
+
+            vi.res.mean[i] = mat_results[1]
+            vi.res.se[i]   = mat_results[2]
+            vi.res.t[i]    = mat_results[3]
+            vi.res.lci[i]  = mat_results[5]
+            vi.res.uci[i]  = mat_results[6]
+            vi.res.df[i]   = mat_results[7]
+            vi.res.obs[i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)") : st_matrix("e(_N_subp)")
+
+          /* SD & Var */
+
+            if(dosd)
+            {
+              checkerr(rc = _stata("estat sd", 1))
+
+              vi.res.sd[i]  = st_matrix("r(sd)")
+              vi.res.var[i] = st_matrix("r(variance)")
+            }
+        }
+
+        /* Count, Min, Max */
+
+          if(dotab)
+          {
+            checkerr(rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2], 1))
+            mat_results = st_matrix("r(StatTotal)")
+
+            if(vi.binary) vi.res.nyes = mat_results[1,.]
+            vi.res.min = mat_results[2,.]
+            vi.res.max = mat_results[3,.]
+          }
+
+      /* Logit Transform & Sorting */
+
+        if(bd.si.ci_proportion & vi.binary)
+        {
+          logitTransform(bd, vi)
+        }
+
+        if(anyof(bd.si.name, bd.opt.display.sort_statistic))
+        {
+          sortResults(bd, vi, 0)
+        }
+    }
+
+  /* function : calculateXiNoOver16() */
+
+    void function calculateXiNoOver16(struct bradmean scalar bd,
+                                      struct varInfo  scalar vi)
+    {
+      `Integer' vars
+      `Boolean' dosd, dotab
+      `Tokens'  cmd_mean, cmd_count
+      `RealMat' mat_results
+      `Integer' rc, i
+
+      /* Getting Information */
+
+        vars = length(vi.answers)
+
+        dosd  = anylist(bd.si.name, ("sd", "var"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+
+      /* Defining Results */
+
+        vi.res.obs = J(1, vars, 0)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(1, vars, .)
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean "
+          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean "
+          else                           cmd_mean = "mean "
+
+          cmd_mean = cmd_mean, (" if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") " + bd.opt.weight.vce)
+
+        /* Count */
+
+          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save")
+
+      /* Calculating Results */
+
+        /* Mean */
+
+          rc = _stata(cmd_mean[1] + vi.term + cmd_mean[2], 1)
+
+          if(rc != 0) return
+
+          mat_results = st_matrix("r(table)")
+
+          vi.res.mean = mat_results[1,.]
+          vi.res.se   = mat_results[2,.]
+          vi.res.t    = mat_results[3,.]
+          vi.res.lci  = mat_results[5,.]
+          vi.res.uci  = mat_results[6,.]
+          vi.res.df   = mat_results[7,.]
+          vi.res.obs  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)") : st_matrix("e(_N_subp)")
+
+        /* SD & Var */
+
+          if(dosd)
+          {
+            checkerr(rc = _stata("estat sd", 1))
+
+            vi.res.sd  = st_matrix("r(sd)")
+            vi.res.var = st_matrix("r(variance)")
+          }
+
+        /* Count, Min, Max */
+
+          if(dotab)
+          {
+            checkerr(rc = _stata(cmd_count[1] + vi.term + cmd_count[2], 1))
+            mat_results = st_matrix("r(StatTotal)")
+
+            vi.res.nyes = mat_results[1,.]
+            vi.res.min  = mat_results[2,.]
+            vi.res.max  = mat_results[3,.]
+
+            rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
+          }
+
+      /* Logit Transform & Sorting */
+
+        if(bd.si.ci_proportion & vi.binary)
+        {
+          logitTransform(bd, vi)
+        }
+
+        if(anyof(bd.si.name, bd.opt.display.sort_statistic))
+        {
+          sortResults(bd, vi, 0)
+        }
+    }
+
+  /* function : calculateSeriesOverCol16() */
+
+    void function calculateSeriesOverCol16(struct bradmean scalar bd,
+                                           struct varInfo  scalar vi)
+    {
+      `Integer' vars, lvls, groups, len
+      `Boolean' dosd, dotab, doovr, doind
+      `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term
+      `RealMat' mat_results
+      `RealVec' over_num
+      `Pos'     over_pos, test_pos1, test_pos2
+      `Integer' rc, i, j, k
+
+      /* Getting Information */
+
+        vars   = length(vi.answers)
+        groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
+
+        dosd  = anylist(bd.si.name, ("sd", "var"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+
+      /* Defining Results */
+
+        vi.res.obs = J(groups, vars, 0)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+
+        vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
+        vi.res.ind_statistic = vi.res.ind_pvalue = J(lvls * lvls, vars, .)
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean "
+          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean "
+          else                           cmd_mean = "mean "
+
+          cmd_mean = cmd_mean, (" if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") " + bd.opt.weight.vce), (" over(" + bd.oi.name + ", nolabel)")
+
+        /* Tabulate Twoway */
+
+          cmd_tab2 = " " + bd.oi.name + " if " + st_local("touse") + " " + bd.opt.weight.cmd
+
+          if(bd.opt.weight.subpop != "") cmd_tab2 = ("svy, subpop(" + bd.opt.weight.subpop + "): tab "), (cmd_tab2 + ", pearson")
+          else if(bd.opt.weight.survey)  cmd_tab2 = ("svy: tab ")                                      , (cmd_tab2 + ", pearson")
+          else                           cmd_tab2 = ("tab ")                                           , (cmd_tab2 + ", chi2")
+
+        /* Count */
+
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+
+      /* Calculating Results */
+
+        for(i=vars; i; i--)
+        {
+          /* Groups */
+
+            /* Mean */
+
+              rc = _stata(cmd_mean[1] + vi.varlist[i] + cmd_mean[2] + cmd_mean[3], 1)
+
+              if(rc != 0) continue
+
+              mat_results = st_matrix("r(table)")'
+              over_names  = st_matrixcolstripe("r(table)")[.,2]
+              over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
+              over_pos    = selectindex(inlist(bd.oi.levels, over_num))
+              over_num    = rangex(1, length(over_num), 1)'
+
+              vi.res.mean[over_pos,i] = mat_results[.,1]
+              vi.res.se[over_pos,i]   = mat_results[.,2]
+              vi.res.t[over_pos,i]    = mat_results[.,3]
+              vi.res.lci[over_pos,i]  = mat_results[.,5]
+              vi.res.uci[over_pos,i]  = mat_results[.,6]
+              vi.res.df[over_pos,i]   = mat_results[.,7]
+              vi.res.obs[over_pos,i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)")' : st_matrix("e(_N_subp)")'
+
+            /* SD & Var */
+
+              if(dosd)
+              {
+                checkerr(rc = _stata("estat sd", 1))
+
+                vi.res.sd[over_pos,i]  = st_matrix("r(sd)")'
+                vi.res.var[over_pos,i] = st_matrix("r(variance)")'
+              }
+
+            /* Testing */
+
+              if((len = length(over_num)) > 1 & (bd.opt.test.overall | bd.opt.test.individual))
+              {
+                doovr = bd.opt.test.overall
+                doind = bd.opt.test.individual
+
+                test_pos1 = vec(J(len, 1, over_num)), J(len, 1, over_num')
+                test_pos1 = test_pos1[selectindex(test_pos1[.,1] :< test_pos1[.,2]),.]
+
+                test_pos2 = vec(J(len, 1, over_pos)), J(len, 1, over_pos')
+                test_pos2 = test_pos2[selectindex(test_pos2[.,1] :< test_pos2[.,2]),.]
+                test_pos2 = (((test_pos2[.,1] :- 1) :* lvls) :+ test_pos2[.,2]), (((test_pos2[.,2] :- 1) :* lvls) :+ test_pos2[.,1])
+
+                len = rows(test_pos1)
+
+                /* Chi2 */
+
+                  if(bd.opt.test.chi_overall & bd.vi.binary & doovr) doovr = 0
+
+                /* T-Test (Overall) */
+
+                  if(bd.opt.test.t_overall & doovr)
+                  {
+                    term = over_names[1] + " - " + over_names[2]
+
+                    checkerr(rc = _stata("lincom " + term[1], 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+
+                    doovr = 0
+                  }
+
+                /* T-Test (Individual) */
+
+                  if(bd.opt.test.t_individual & doind)
+                  {
+                    term = "lincom " :+ over_names[test_pos1[.,1]] :+ " - " :+ over_names[test_pos1[.,2]]
+
+                    for(j=len; j; j--)
+                    {
+                      checkerr(rc = _stata(term[j], 1))
+
+                      vi.res.ind_statistic[test_pos2[j,1],i] = vi.res.ind_statistic[test_pos2[j,2],i] = st_numscalar("r(t)")
+                      vi.res.ind_pvalue[test_pos2[j,1],i]    = vi.res.ind_pvalue[test_pos2[j,2],i]    = st_numscalar("r(p)")
+                    }
+
+                    doind = 0
+                  }
+
+                /* F-Test */
+
+                  if((bd.opt.test.f_overall & doovr) | (bd.opt.test.f_individual & doind))
+                  {
+                    term = "(" :+ over_names[test_pos1[.,1]] :+ " == " :+ over_names[test_pos1[.,2]] :+ ")"
+                    term = invtokens(term')
+
+                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
+
+                    if(bd.opt.test.f_overall & doovr)
+                    {
+                      vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                    }
+
+                    if(bd.opt.test.f_individual & doind)
+                    {
+                      mat_results = st_matrix("r(mtest)")
+
+                      vi.res.ind_statistic[test_pos2[.,1],i] = vi.res.ind_statistic[test_pos2[.,2],i] = mat_results[.,1]
+                      vi.res.ind_pvalue[test_pos2[.,1],i]    = vi.res.ind_pvalue[test_pos2[.,2],i]    = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3] : mat_results[.,4]
+                    }
+                  }
+
+                /* Chi2 (2) */
+
+                  if(bd.opt.test.chi_overall & bd.vi.binary & bd.opt.test.overall)
+                  {
+                    checkerr(rc = _stata(cmd_tab2[1] + vi.varlist[i] + cmd_tab2[2], 1))
+
+                    if(bd.opt.weight.survey)
+                    {
+                      vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
+                      vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                    }
+                    else
+                    {
+                      vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
+                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                    }
+                  }
+              }
+
+          /* Total */
+
+            if(!bd.opt.over.total) continue
+
+            /* Mean */
+
+              rc = _stata(cmd_mean[1] + vi.varlist[i] + cmd_mean[2], 1)
+
+              if(rc != 0) continue
+
+              mat_results = st_matrix("r(table)")
+
+              vi.res.mean[groups,i] = mat_results[1]
+              vi.res.se[groups,i]   = mat_results[2]
+              vi.res.t[groups,i]    = mat_results[3]
+              vi.res.lci[groups,i]  = mat_results[5]
+              vi.res.uci[groups,i]  = mat_results[6]
+              vi.res.df[groups,i]   = mat_results[7]
+              vi.res.obs[groups,i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)") : st_matrix("e(_N_subp)")
+
+            /* SD & Var */
+
+              if(dosd)
+              {
+                checkerr(rc = _stata("estat sd", 1))
+
+                vi.res.sd[groups,i]  = st_matrix("r(sd)")
+                vi.res.var[groups,i] = st_matrix("r(variance)")
+              }
+        }
+
+        /* Count, Min, Max */
+
+          if(dotab)
+          {
+            checkerr(rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2] + cmd_count[3], 1))
+
+            for(j=lvls; j; j--)
+            {
+              mat_results = st_matrix("r(Stat" + strofreal(j) + ")")
+
+              if(vi.binary) vi.res.nyes[j,.] = mat_results[1,.]
+              vi.res.min[j,.] = mat_results[2,.]
+              vi.res.max[j,.] = mat_results[3,.]
+            }
+
+            if(bd.opt.over.total)
+            {
+              mat_results = st_matrix("r(StatTotal)")
+
+              if(vi.binary) vi.res.nyes[groups,.] = mat_results[1,.]
+              vi.res.min[groups,.] = mat_results[2,.]
+              vi.res.max[groups,.] = mat_results[3,.]
+            }
+          }
+
+      /* Logit Transform & Sorting */
+    }
+
+  /* function : calculateXiOverCol16() */
+
+    void function calculateXiOverCol16(struct bradmean scalar bd,
+                                       struct varInfo  scalar vi)
+    {
+      `Integer' vars, lvls, groups, len
+      `Boolean' dosd, dotab, doovr, doind
+      `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term
+      `RealMat' mat_results
+      `RealVec' over_num
+      `Pos'     over_pos, test_pos1, test_pos2
+      `Integer' rc, i, j
+
+      /* Getting Information */
+
+        vars   = length(vi.answers)
+        groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
+
+        dosd  = anylist(bd.si.name, ("sd", "var"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+
+      /* Defining Results */
+
+        vi.res.obs = J(groups, vars, 0)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+
+        vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
+        vi.res.ind_statistic = vi.res.ind_pvalue = J(lvls * lvls, vars, .)
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean "
+          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean "
+          else                           cmd_mean = "mean "
+
+          cmd_mean = cmd_mean, (" if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") " + bd.opt.weight.vce), (" over(" + bd.oi.name + ", nolabel)")
+
+        /* Tabulate Twoway */
+
+          cmd_tab2 = " " + bd.oi.name + " if " + st_local("touse") + " " + bd.opt.weight.cmd
+
+          if(bd.opt.weight.subpop != "") cmd_tab2 = ("svy, subpop(" + bd.opt.weight.subpop + "): tab "), (cmd_tab2 + ", pearson")
+          else if(bd.opt.weight.survey)  cmd_tab2 = ("svy: tab ")                                      , (cmd_tab2 + ", pearson")
+          else                           cmd_tab2 = ("tab ")                                           , (cmd_tab2 + ", chi2")
+
+        /* Count */
+
+          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+
+      /* Calculating Results */
+
+        /* Groups */
+
+          /* Mean */
+
+            rc = _stata(cmd_mean[1] + vi.term + cmd_mean[2] + cmd_mean[3], 1)
+
+            if(rc != 0) return
+
+            mat_results = st_matrix("r(table)")
+            over_names  = st_matrixcolstripe("r(table)")[.,2]
+            over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
+            over_pos    = selectindex(inlist(bd.oi.levels, uniqrows(over_num)))
+            len         = length(over_pos)
+            over_num    = rangex(1, len, 1)'
+
+            vi.res.mean[over_pos,.] = colshape(mat_results[1,.], len)'
+            vi.res.se[over_pos,.]   = colshape(mat_results[2,.], len)'
+            vi.res.t[over_pos,.]    = colshape(mat_results[3,.], len)'
+            vi.res.lci[over_pos,.]  = colshape(mat_results[5,.], len)'
+            vi.res.uci[over_pos,.]  = colshape(mat_results[6,.], len)'
+            vi.res.df[over_pos,.]   = colshape(mat_results[7,.], len)'
+            vi.res.obs[over_pos,.]  = (bd.opt.weight.subpop == "") ? colshape(st_matrix("e(_N)"), len)' : colshape(st_matrix("e(_N_subp)"), len)'
+
+          /* SD & Var */
+
+            if(dosd)
+            {
+              checkerr(rc = _stata("estat sd", 1))
+
+              vi.res.sd[over_pos,.]  = colshape(st_matrix("r(sd)"), len)'
+              vi.res.var[over_pos,.] = colshape(st_matrix("r(variance)"), len)'
+            }
+
+          /* Count, Min, Max */
+
+            if(dotab)
+            {
+              checkerr(rc = _stata(cmd_count[1] + vi.term + cmd_count[2] + cmd_count[3], 1))
+
+              for(i=lvls; i; i--)
+              {
+                mat_results = st_matrix("r(Stat" + strofreal(i) + ")")
+
+                vi.res.nyes[i,.] = mat_results[1,.]
+                vi.res.min[i,.]  = mat_results[2,.]
+                vi.res.max[i,.]  = mat_results[3,.]
+              }
+
+              if(bd.opt.over.total)
+              {
+                mat_results = st_matrix("r(StatTotal)")
+
+                vi.res.nyes[groups,.] = mat_results[1,.]
+                vi.res.min[groups,.]  = mat_results[2,.]
+                vi.res.max[groups,.]  = mat_results[3,.]
+              }
+
+              rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
+            }
+
+          /* Testing */
+
+            if(length(over_num) > 1 & (bd.opt.test.overall | bd.opt.test.individual))
+            {
+              doovr = bd.opt.test.overall
+              doind = bd.opt.test.individual
+
+              test_pos1 = vec(J(len, 1, over_num)), J(len, 1, over_num')
+              test_pos1 = test_pos1[selectindex(test_pos1[.,1] :< test_pos1[.,2]),.]
+
+              test_pos2 = vec(J(len, 1, over_pos)), J(len, 1, over_pos')
+              test_pos2 = test_pos2[selectindex(test_pos2[.,1] :< test_pos2[.,2]),.]
+              test_pos2 = (((test_pos2[.,1] :- 1) :* lvls) :+ test_pos2[.,2]), (((test_pos2[.,2] :- 1) :* lvls) :+ test_pos2[.,1])
+
+              len = rows(test_pos1)
+
+              /* Chi2 (1) */
+
+                if(bd.opt.test.chi_overall & doovr) doovr = 0
+
+              /* T-Test (Overall) */
+
+                if(bd.opt.test.t_overall & doovr)
+                {
+                  term = colshape(over_names, 2)
+                  term = "lincom " :+ term[.,1] :+ " - " :+ term[.,2]
+
+                  for(i=vars; i; i--)
+                  {
+                    checkerr(rc = _stata(term[i], 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  }
+
+                  doovr = 0
+                }
+
+              /* T-Test (Individual) */
+
+                if(bd.opt.test.t_individual & doind)
+                {
+                  for(i=vars; i; i--)
+                  {
+                    term = over_names[(over_num :+ ((i-1) :* lvls))]
+                    term = "lincom " :+ term[test_pos1[.,1]] :+ " - " :+ term[test_pos1[.,2]]
+
+                    for(j=len; j; j--)
+                    {
+                      checkerr(rc = _stata(term[j], 1))
+
+                      vi.res.ind_statistic[test_pos2[j,1],i] = vi.res.ind_statistic[test_pos2[j,2],i] = st_numscalar("r(t)")
+                      vi.res.ind_pvalue[test_pos2[j,1],i]    = vi.res.ind_pvalue[test_pos2[j,2],i]    = st_numscalar("r(p)")
+                    }
+                  }
+
+                  doind = 0
+                }
+
+              /* F-Test */
+
+                if((bd.opt.test.f_overall & doovr) | (bd.opt.test.f_individual & doind))
+                {
+                  len = length(over_num)
+
+                  for(i=vars; i; i--)
+                  {
+                    term = over_names[(over_num :+ ((i-1) :* len))]
+                    term = "(" :+ term[test_pos1[.,1]] :+ " == " :+ term[test_pos1[.,2]] :+ ")"
+                    term = invtokens(term')
+
+                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
+
+                    if(bd.opt.test.f_overall & doovr)
+                    {
+                      vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                    }
+
+                    if(bd.opt.test.f_individual & doind)
+                    {
+                      mat_results = st_matrix("r(mtest)")
+
+                      vi.res.ind_statistic[test_pos2[.,1],i] = vi.res.ind_statistic[test_pos2[.,2],i] = mat_results[.,1]
+                      vi.res.ind_pvalue[test_pos2[.,1],i]    = vi.res.ind_pvalue[test_pos2[.,2],i]    = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3] : mat_results[.,4]
+                    }
+                  }
+                }
+
+              /* Chi2 (2) */
+
+                if(bd.opt.test.chi_overall & bd.opt.test.overall)
+                {
+                  checkerr(rc = _stata(cmd_tab2[1] + vi.varlist + cmd_tab2[2], 1))
+
+                  if(bd.opt.weight.survey)
+                  {
+                    vi.res.ovr_statistic = J(1, vars, st_numscalar("e(F_Pear)"))
+                    vi.res.ovr_pvalue    = J(1, vars, st_numscalar("e(p_Pear)"))
+                  }
+                  else
+                  {
+                    vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
+                    vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
+                  }
+                }
+            }
+
+        /* Total */
+
+          if(bd.opt.over.total)
+          {
+            /* Mean */
+
+              rc = _stata(cmd_mean[1] + vi.term + cmd_mean[2], 1)
+
+              if(rc != 0) return
+
+              mat_results = st_matrix("r(table)")
+
+              vi.res.mean[groups,.] = mat_results[1,.]
+              vi.res.se[groups,.]   = mat_results[2,.]
+              vi.res.t[groups,.]    = mat_results[3,.]
+              vi.res.lci[groups,.]  = mat_results[5,.]
+              vi.res.uci[groups,.]  = mat_results[6,.]
+              vi.res.df[groups,.]   = mat_results[7,.]
+              vi.res.obs[groups,.]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)") : st_matrix("e(_N_subp)")
+
+            /* SD & Var */
+
+              if(dosd)
+              {
+                checkerr(rc = _stata("estat sd", 1))
+
+                vi.res.sd[groups,.]  = st_matrix("r(sd)")
+                vi.res.var[groups,.] = st_matrix("r(variance)")
+              }
+          }
+
+      /* Logit Transform & Sorting */
+
+        if(bd.si.ci_proportion)
+        {
+          logitTransform(bd, vi)
+        }
+
+        if(anyof(bd.si.name, bd.opt.display.sort_statistic))
+        {
+          sortResults(bd, vi, 1)
+        }
+    }
+
+  /* function : calculateSeriesOverRow16() */
+
+    void function calculateSeriesOverRow16(struct bradmean scalar bd,
+                                           struct varInfo  scalar vi)
+    {
+      `Integer' vars, groups
+      `Boolean' dosd, dotab
+      `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term
+      `String'  cmd_tab1, matcell, matrow
+      `RealMat' mat_results
+      `RealVec' over_num
+      `Pos'     pos
+      `Integer' rc, i, j
+
+      /* Getting Information */
+
+        vars   = length(vi.answers)
+        groups = length(bd.oi.levels)
+
+        dosd  = anylist(bd.si.name, ("sd", "var"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+
+      /* Defining Results */
+
+        vi.res.obs = J(groups, vars, 0)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+
+        vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
+
+        if(!vi.binary) return
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          cmd_mean = ("i." + bd.oi.name + " if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") " + bd.opt.weight.vce)
+
+          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean " + cmd_mean
+          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean " + cmd_mean
+          else                           cmd_mean = "mean " + cmd_mean
+
+        /* Tabulate Oneway */
+
+          matcell  = st_tempname()
+          matrow   = st_tempname()
+          cmd_tab1 = "tab " + bd.oi.name + " if e(sample), nolabel matcell(" + matcell + ") matrow(" + matrow + ")"
+
+        /* Tabulate Twoway */
+
+          cmd_tab2 = " " + bd.oi.name + " if " + st_local("touse") + " " + bd.opt.weight.cmd
+
+          if(bd.opt.weight.subpop != "") cmd_tab2 = ("svy, subpop(" + bd.opt.weight.subpop + "): tab "), (cmd_tab2 + ", pearson")
+          else if(bd.opt.weight.survey)  cmd_tab2 = ("svy: tab ")                                      , (cmd_tab2 + ", pearson")
+          else                           cmd_tab2 = ("tab ")                                           , (cmd_tab2 + ", chi2")
+
+        /* Count */
+
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+
+      /* Calculating Results */
+
+        for(i=vars; i; i--)
+        {
+          /* Mean (1) */
+
+            rc = _stata(cmd_mean + " over(" + vi.varlist[i] + ", nolabel)", 1)
+
+            if(rc != 0) continue
+
+            mat_results = st_matrix("r(table)")'
+            over_names  = st_matrixcolstripe("r(table)")[.,2]
+            over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
+
+          /* Observations */
+
+            rc = _stata(cmd_tab1, 1)
+
+            pos               = st_matrix(matrow)
+            vi.res.obs[pos,i] = st_matrix(matcell)
+
+          /* Mean (2) */
+
+            if(allof(over_num, 0))
+            {
+              vi.res.mean[.,i] = J(groups, 1, 0)
+              vi.res.se[.,i]   = J(groups, 1, 0)
+              vi.res.sd[.,i]   = J(groups, 1, 0)
+              vi.res.var[.,i]  = J(groups, 1, 0)
+
+              continue
+            }
+
+            pos = rangex(2, groups, 2)
+
+            vi.res.mean[.,i] = mat_results[pos,1]
+            vi.res.se[.,i]   = mat_results[pos,2]
+            vi.res.t[.,i]    = mat_results[pos,3]
+            vi.res.lci[.,i]  = mat_results[pos,5]
+            vi.res.uci[.,i]  = mat_results[pos,6]
+            vi.res.df[.,i]   = mat_results[pos,7]
+
+          /* Standard Deviation & Variance */
+
+            if(dosd)
+            {
+              checkerr(rc = _stata("estat sd", 1))
+
+              vi.res.sd[.,i]  = st_matrix("r(sd)")'[pos]
+              vi.res.var[.,i] = st_matrix("r(variance)")'[pos]
+            }
+
+          /* Testing */
+
+            if(bd.opt.test.chi_overall)
+            {
+              checkerr(rc = _stata(cmd_tab2[1] + vi.varlist[i] + cmd_tab2[2], 1))
+
+              if(bd.opt.weight.survey)
+              {
+                vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
+                vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+              }
+              else
+              {
+                vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
+                vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+              }
+            }
+            else if(bd.opt.test.f_overall)
+            {
+              term = "test " + invtokens(over_names[pos]', " == ") + ", mtest(" + bd.opt.test.f_mtest + ")"
+
+              checkerr(rc = _stata(term, 1))
+
+              vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+              vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+            }
+        }
+
+        /* Count, Min, Max */
+
+          if(dotab)
+          {
+            checkerr(rc = _stata(cmd_count[1] + invtokens(vi.varlist) + cmd_count[2] + cmd_count[3], 1))
+
+            for(i=groups; i; i--)
+            {
+              mat_results = st_matrix("r(Stat" + strofreal(i) + ")")
+
+              vi.res.nyes[i,.] = mat_results[1,.]
+              vi.res.min[i,.]  = mat_results[2,.]
+              vi.res.max[i,.]  = mat_results[3,.]
+            }
+          }
+
+      /* Logit Transform & Sorting */
+
+        if(bd.si.ci_proportion & vi.binary)
+        {
+          logitTransform(bd, vi)
+        }
+
+        if(anyof(bd.si.name, bd.opt.display.sort_statistic))
+        {
+          sortResults(bd, vi, 1)
+        }
+    }
+
+  /* function : calculateXiOverRow16() */
+
+    void function calculateXiOverRow16(struct bradmean scalar bd,
+                                       struct varInfo  scalar vi)
+    {
+      `Integer' vars, groups, len
+      `Boolean' dosd, dotab
+      `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term
+      `String'  cmd_tab1, matcell, matrow
+      `RealMat' mat_results
+      `DataVec' over_num
+      `Pos'     over_pos, pos
+      `Integer' rc, i, j
+
+      /* Getting Information */
+
+        vars   = length(vi.answers)
+        groups = length(bd.oi.levels)
+
+        dosd  = anylist(bd.si.name, ("sd", "var"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+
+      /* Defining Results */
+
+        vi.res.obs = J(groups, vars, 0)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+
+        vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
+
+      /* Defining Commands */
+
+        /* Mean */
+
+          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean "
+          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean "
+          else                           cmd_mean = "mean "
+
+          cmd_mean = cmd_mean + "i." + bd.oi.name + " if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") over(" + vi.varlist + ") " + bd.opt.weight.vce
+
+        /* Tabulate Oneway */
+
+          matcell  = st_tempname()
+          matrow   = st_tempname()
+          cmd_tab1 = "tab " + bd.oi.name + " if e(sample), nolabel matcell(" + matcell + ") matrow(" + matrow + ")"
+
+        /* Tabulate Twoway */
+
+          cmd_tab2 = "tab " + vi.varlist + " " + bd.oi.name + " if " + st_local("touse") + " " + bd.opt.weight.cmd
+
+          if(bd.opt.weight.subpop != "") cmd_tab2 = "svy, subpop(" + bd.opt.weight.subpop + "): " + cmd_tab2 + ", pearson"
+          else if(bd.opt.weight.survey)  cmd_tab2 = "svy: "                                       + cmd_tab2 + ", pearson"
+          else                           cmd_tab2 =                                                 cmd_tab2 + ", chi2"
+
+        /* Count */
+
+          cmd_count = "xi, noomit: tabstat " + vi.term + " if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save by(" + bd.oi.name + ")"
+
+      /* Calculating Results */
+
+        /* Mean */
+
+          rc = _stata(cmd_mean, 1)
+
+          if(rc != 0) return
+
+          mat_results = st_matrix("r(table)")
+          over_names  = st_matrixcolstripe("r(table)")[.,2]
+          over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
+          over_pos    = uniqrows(over_num)
+          len         = length(over_pos)
+
+          vi.res.mean[.,over_pos] = colshape(mat_results[1,.], len)
+          vi.res.se[.,over_pos]   = colshape(mat_results[2,.], len)
+          vi.res.t[.,over_pos]    = colshape(mat_results[3,.], len)
+          vi.res.lci[.,over_pos]  = colshape(mat_results[5,.], len)
+          vi.res.uci[.,over_pos]  = colshape(mat_results[6,.], len)
+          vi.res.df[.,over_pos]   = colshape(mat_results[7,.], len)
+
+        /* Observations */
+
+          rc = _stata(cmd_tab1, 1)
+
+          pos               = st_matrix(matrow)
+          vi.res.obs[pos,.] = J(1, vars, st_matrix(matcell))
+
+        /* Standard Deviation & Variance */
+
+          if(dosd)
+          {
+            checkerr(rc = _stata("estat sd", 1))
+
+            vi.res.sd[.,over_pos]  = colshape(st_matrix("r(sd)"), len)
+            vi.res.var[.,over_pos] = colshape(st_matrix("r(variance)"), len)
+          }
+
+        /* Count, Min, Max */
+
+          if(dotab)
+          {
+            checkerr(rc = _stata(cmd_count, 1))
+
+            for(i=groups; i; i--)
+            {
+              mat_results = st_matrix("r(Stat" + strofreal(i) + ")")
+
+              vi.res.nyes[i,.] = mat_results[1,.]
+              vi.res.min[i,.]  = mat_results[2,.]
+              vi.res.max[i,.]  = mat_results[3,.]
+            }
+
+            rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
+          }
+
+        /* Testing */
+
+          if(bd.opt.test.chi_overall)
+          {
+            checkerr(rc = _stata(cmd_tab2, 1))
+
+            if(bd.opt.weight.survey)
+            {
+              vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("e(F_Pear)"))
+              vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("e(p_Pear)"))
+            }
+            else
+            {
+              vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("r(chi2)"))
+              vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("r(p)"))
+            }
+          }
+          else if(bd.opt.test.f_overall)
+          {
+            over_names = colshape(over_names, len)'
+
+            for(i=len; i; i--)
+            {
+              term = "test " + invtokens(over_names[i,.], " == ") + ", mtest(" + bd.opt.test.f_mtest + ")"
+
+              checkerr(rc = _stata(term, 1))
+
+              vi.res.ovr_statistic[over_pos[i]] = st_numscalar("r(F)")
+              vi.res.ovr_pvalue[over_pos[i]]    = st_numscalar("r(p)")
+            }
+          }
+
+      /* Logit Transform & Sorting */
+
+        if(bd.si.ci_proportion)
+        {
+          logitTransform(bd, vi)
+        }
+
+        if(anyof(bd.si.name, bd.opt.display.sort_statistic))
+        {
+          sortResults(bd, vi, 1)
+        }
     }
 
 /*======================================================================*/
