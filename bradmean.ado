@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.7                                                **
-**   Date:         01/09/2020                                           **
+**   Version:      1.6.8                                                **
+**   Date:         01/10/2020                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -97,12 +97,12 @@ include bradsuite.mata, adopath;
   *   05. Getting Results                                    *
   *----------------------------------------------------------*;
 
-    timermata: initVarInfo(bd);
-    timermata: initOverInfo(bd);
-    timermata: initStatInfo(bd);
-    timermata: gatherResults(bd);
-    timermata: printer(bd);
-    timer on 8; mata: createExcel(bd);
+    mata: initVarInfo(bd);
+    mata: initOverInfo(bd);
+    mata: initStatInfo(bd);
+    mata: gatherResults(bd);
+    mata: printer(bd);
+    mata: createExcel(bd);
 
   *----------------------------------------------------------*
   *   06. Cleaning Up                                        *
