@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.8                                                **
-**   Date:         01/10/2020                                           **
+**   Version:      1.6.9                                                **
+**   Date:         02/19/2020                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -1395,9 +1395,9 @@ mata:
           }
         }
 
-      /* Version 16.0 */
+      /* Version 16.0+ */
 
-        if(c("version") == 16)
+        if(c("version") >= 16)
         {
           if(groups == 0)
           {
@@ -2457,7 +2457,7 @@ mata:
     }
 
 /*======================================================================*/
-/*   Mata Functions - Calculating Results - Version 16.0                */
+/*   Mata Functions - Calculating Results - Version 16.0+               */
 /*======================================================================*/
 
   /* function : calculateSeriesNoOver16() */
