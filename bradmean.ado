@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.6.9                                                **
-**   Date:         02/19/2020                                           **
+**   Version:      1.7.0                                                **
+**   Date:         03/11/2020                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -3388,6 +3388,8 @@ mata:
           over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
           over_pos    = uniqrows(over_num)
           len         = length(over_pos)
+
+          for(i=len; i; i--) over_pos[i] = selectindex(over_num :== over_pos[i])[1]
 
           vi.res.mean[.,over_pos] = colshape(mat_results[1,.], len)
           vi.res.se[.,over_pos]   = colshape(mat_results[2,.], len)
