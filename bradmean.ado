@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.7.0                                                **
-**   Date:         03/11/2020                                           **
+**   Version:      1.7.1                                                **
+**   Date:         03/23/2020                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -2918,9 +2918,9 @@ mata:
 
         /* Mean */
 
-          if(bd.opt.weight.subpop != "") cmd_mean = "svy, subpop(" + bd.opt.weight.subpop + "): mean "
-          else if(bd.opt.weight.survey)  cmd_mean = "svy: mean "
-          else                           cmd_mean = "mean "
+          if(bd.opt.weight.subpop != "") cmd_mean = "xi, noomit: svy, subpop(" + bd.opt.weight.subpop + "): mean "
+          else if(bd.opt.weight.survey)  cmd_mean = "xi, noomit: svy: mean "
+          else                           cmd_mean = "xi, noomit: mean "
 
           cmd_mean = cmd_mean, (" if " + st_local("touse") + " " + bd.opt.weight.cmd + ", level(" + strofreal(bd.si.ci_level) + ") " + bd.opt.weight.vce), (" over(" + bd.oi.name + ", nolabel)")
 
