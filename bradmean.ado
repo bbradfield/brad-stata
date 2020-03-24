@@ -2892,7 +2892,7 @@ mata:
     {
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab, doovr, doind
-      `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term
+      `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term, varlist
       `RealMat' mat_results
       `RealVec' over_num
       `Pos'     over_pos, test_pos1, test_pos2
@@ -2946,6 +2946,7 @@ mata:
 
             if(rc != 0) return
 
+            varlist  = tokens(st_global("e(varlist)"))
             mat_results = st_matrix("r(table)")
             over_names  = st_matrixcolstripe("r(table)")[.,2]
             over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
@@ -3148,6 +3149,8 @@ mata:
         {
           sortResults(bd, vi, 1)
         }
+
+      rc = _stata("drop " + invtokens(varlist))
     }
 
   /* function : calculateSeriesOverRow16() */
