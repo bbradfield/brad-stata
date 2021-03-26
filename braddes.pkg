@@ -1,0 +1,14 @@
+d 'braddes': describe data in a single-line per variable format
+d
+d   Describe data in a single-line per variable format
+d
+d Version 0.2.0
+d
+d Distribution-Date: 25mar2021
+d
+d Author: Brian Bradfield
+d Support: email bbradfield@rti.org
+d
+f braddes.ado
+f braddes.sthlp
+f bradsuite.mata

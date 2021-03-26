@@ -1,5 +1,6 @@
 v 3
 d Stata packages developed by bbradfield
 d Brian Bradfield (bbradfield@rti.org)
-p bradmean - Computes individual means
+p bradmean - Computes multiple independent means in a single table
 p bradbook - Cleaner codebook for export to Word
+p braddes - Describe data in a single-line per variable format
