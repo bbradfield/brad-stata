@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.7.1                                                **
-**   Date:         03/23/2020                                           **
+**   Version:      1.7.6                                                **
+**   Date:         04/09/2021                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -18,7 +18,7 @@ include bradsuite.mata, adopath;
 /*   Stata Functions - bradmean                                         */
 /*======================================================================*/
 
-  program define bradmean, nclass sortpreserve byable(recall);
+  program define bradmean_dev, nclass sortpreserve byable(recall);
   syntax varlist(fv) [if] [in] [fweight aweight pweight iweight/],
     [
       SVY
@@ -146,6 +146,20 @@ include bradsuite.mata, adopath;
       SEParator(string)
       *
     ];
+
+    sreturn local round         = "";
+    sreturn local roundc        = "";
+    sreturn local roundi        = "";
+    sreturn local percent       = "";
+    sreturn local symbol        = "";
+    sreturn local comma         = "";
+    sreturn local stars         = "";
+    sreturn local scripts       = "";
+    sreturn local notation      = "";
+    sreturn local ci_proportion = "";
+    sreturn local ci_combined   = "";
+    sreturn local ci_separator  = "";
+    sreturn local ci_level      = "";
 
     if(`round'  >= 0 & `round'  <= 7) sreturn local round  = `round';
     if(`roundc' >= 0 & `roundc' <= 7) sreturn local roundc = `roundc';
@@ -377,6 +391,9 @@ mata:
       /* MinMax */
       `RealMat' min, max
 
+      /* Pctiles */
+      `RealMat' p25, p50, p75
+
       /* Calculation Only */
       `RealMat' t
       `RealMat' df
@@ -499,7 +516,7 @@ mata:
 
       /* Statistic */
 
-        if(anyof(tokens("obs nyes mean se sd var min max"), input_string)) dis.sort_statistic = input_string
+        if(anyof(tokens("obs nyes mean se sd var min max p25 p50 p75"), input_string)) dis.sort_statistic = input_string
     }
 
   /* function : parseDisplay() */
@@ -1123,7 +1140,7 @@ mata:
 
       /* Getting Stat List */
 
-        st_local("statlist", "obs nyes mean se sd var lci uci min max")
+        st_local("statlist", "obs nyes mean se sd var lci uci min max p25 p50 p75")
         st_local("stats", subinword(subinword(strlower(st_local("stats")), "ci", "lci uci"), "all", st_local("statlist")))
 
         rc = _stata("local stats : list stats & statlist")
@@ -1137,8 +1154,8 @@ mata:
 
         bd.si.label = bd.si.name
 
-        statlist = ("obs", "nyes"  , "mean", "se"     , "sd"     , "var"     , "lci"     , "uci"     , "min", "max") \
-                   ("Obs", "n(Yes)", "Mean", "Std Err", "Std Dev", "Variance", "Lower CI", "Upper CI", "Min", "Max")
+        statlist = ("obs", "nyes"  , "mean", "se"     , "sd"     , "var"     , "lci"     , "uci"     , "min", "max", "p25"        , "p50"        , "p75"        ) \
+                   ("Obs", "n(Yes)", "Mean", "Std Err", "Std Dev", "Variance", "Lower CI", "Upper CI", "Min", "Max", "25th Pctile", "50th Pctile", "75th Pctile")
 
         for(i=len; i; i--) bd.si.label[i] = statlist[2, selectindex(bd.si.name[i] :== statlist[1,.])]
 
@@ -1284,6 +1301,9 @@ mata:
       if(stat == "var")  return(in_res.var)
       if(stat == "min")  return(in_res.min)
       if(stat == "max")  return(in_res.max)
+      if(stat == "p25")  return(in_res.p25)
+      if(stat == "p50")  return(in_res.p50)
+      if(stat == "p75")  return(in_res.p75)
 
       return
     }
@@ -1327,6 +1347,9 @@ mata:
         vi.res.var  = vi.res.var[sort_order]
         vi.res.min  = vi.res.min[sort_order]
         vi.res.max  = vi.res.max[sort_order]
+        vi.res.p25  = vi.res.p25[sort_order]
+        vi.res.p50  = vi.res.p50[sort_order]
+        vi.res.p75  = vi.res.p75[sort_order]
         vi.res.t    = vi.res.t[sort_order]
         vi.res.df   = vi.res.df[sort_order]
       }
@@ -1346,6 +1369,9 @@ mata:
         vi.res.var           = vi.res.var[.,sort_order]
         vi.res.min           = vi.res.min[.,sort_order]
         vi.res.max           = vi.res.max[.,sort_order]
+        vi.res.p25           = vi.res.p25[.,sort_order]
+        vi.res.p50           = vi.res.p50[.,sort_order]
+        vi.res.p75           = vi.res.p75[.,sort_order]
         vi.res.t             = vi.res.t[.,sort_order]
         vi.res.df            = vi.res.df[.,sort_order]
         vi.res.ovr_statistic = vi.res.ovr_statistic[.,sort_order]
@@ -1451,7 +1477,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(1, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(1, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(1, vars, .)
 
       /* Defining Commands */
 
@@ -1465,7 +1491,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save")
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save")
 
       /* Calculating Results */
 
@@ -1508,6 +1534,9 @@ mata:
             if(vi.binary) vi.res.nyes = mat_results[1,.]
             vi.res.min = mat_results[2,.]
             vi.res.max = mat_results[3,.]
+            vi.res.p25 = mat_results[4,.]
+            vi.res.p50 = mat_results[5,.]
+            vi.res.p75 = mat_results[6,.]
           }
 
       /* Logit Transform & Sorting */
@@ -1544,7 +1573,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(1, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(1, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(1, vars, .)
 
       /* Defining Commands */
 
@@ -1558,7 +1587,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save")
+          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save")
 
       /* Calculating Results */
 
@@ -1599,6 +1628,9 @@ mata:
             vi.res.nyes = mat_results[1,.]
             vi.res.min  = mat_results[2,.]
             vi.res.max  = mat_results[3,.]
+            vi.res.p25  = mat_results[4,.]
+            vi.res.p50  = mat_results[5,.]
+            vi.res.p75  = mat_results[6,.]
           }
 
       /* Logit Transform & Sorting */
@@ -1642,7 +1674,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
         vi.res.ind_statistic = vi.res.ind_pvalue = J(lvls * lvls, vars, .)
@@ -1667,7 +1699,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save"), (" by(" + bd.oi.name + ")")
 
       /* Calculating Results */
 
@@ -1786,13 +1818,19 @@ mata:
 
                     if(bd.opt.weight.survey)
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                      if(st_numscalar("e(r)") > 1)
+                      {
+                        vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
+                        vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                      }
                     }
                     else
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                      if(st_numscalar("r(r)") > 1)
+                      {
+                        vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
+                        vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                      }
                     }
                   }
               }
@@ -1841,6 +1879,9 @@ mata:
               if(vi.binary) vi.res.nyes[j,.] = mat_results[1,.]
               vi.res.min[j,.] = mat_results[2,.]
               vi.res.max[j,.] = mat_results[3,.]
+              vi.res.p25[j,.] = mat_results[4,.]
+              vi.res.p50[j,.] = mat_results[5,.]
+              vi.res.p75[j,.] = mat_results[6,.]
             }
 
             if(bd.opt.over.total)
@@ -1850,6 +1891,9 @@ mata:
               if(vi.binary) vi.res.nyes[groups,.] = mat_results[1,.]
               vi.res.min[groups,.] = mat_results[2,.]
               vi.res.max[groups,.] = mat_results[3,.]
+              vi.res.p25[groups,.] = mat_results[4,.]
+              vi.res.p50[groups,.] = mat_results[5,.]
+              vi.res.p75[groups,.] = mat_results[6,.]
             }
           }
 
@@ -1892,7 +1936,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
         vi.res.ind_statistic = vi.res.ind_pvalue = J(lvls * lvls, vars, .)
@@ -1917,7 +1961,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save"), (" by(" + bd.oi.name + ")")
 
       /* Calculating Results */
 
@@ -1967,6 +2011,9 @@ mata:
                 vi.res.nyes[i,.] = mat_results[1,.]
                 vi.res.min[i,.]  = mat_results[2,.]
                 vi.res.max[i,.]  = mat_results[3,.]
+                vi.res.p25[i,.] = mat_results[4,.]
+                vi.res.p50[i,.] = mat_results[5,.]
+                vi.res.p75[i,.] = mat_results[6,.]
               }
 
               if(bd.opt.over.total)
@@ -1976,6 +2023,9 @@ mata:
                 vi.res.nyes[groups,.] = mat_results[1,.]
                 vi.res.min[groups,.]  = mat_results[2,.]
                 vi.res.max[groups,.]  = mat_results[3,.]
+                vi.res.p25[groups,.]  = mat_results[4,.]
+                vi.res.p50[groups,.]  = mat_results[5,.]
+                vi.res.p75[groups,.]  = mat_results[6,.]
               }
             }
 
@@ -2070,13 +2120,19 @@ mata:
 
                   if(bd.opt.weight.survey)
                   {
-                    vi.res.ovr_statistic = J(1, vars, st_numscalar("e(F_Pear)"))
-                    vi.res.ovr_pvalue    = J(1, vars, st_numscalar("e(p_Pear)"))
+                    if(st_numscalar("e(r)") > 1)
+                    {
+                      vi.res.ovr_statistic = J(1, vars, st_numscalar("e(F_Pear)"))
+                      vi.res.ovr_pvalue    = J(1, vars, st_numscalar("e(p_Pear)"))
+                    }
                   }
                   else
                   {
-                    vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
-                    vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
+                    if(st_numscalar("r(r)") > 1)
+                    {
+                      vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
+                      vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
+                    }
                   }
                 }
             }
@@ -2137,6 +2193,7 @@ mata:
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, term, varlist
       `String'  cmd_tab1, matcell, matrow
       `RealMat' mat_results
+      `RealVec' over_num
       `Pos'     pos
       `Integer' rc, i, j
 
@@ -2151,7 +2208,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
 
@@ -2183,7 +2240,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save"), (" by(" + bd.oi.name + ")")
 
       /* Calculating Results */
 
@@ -2196,6 +2253,7 @@ mata:
             if(rc != 0) continue
 
             mat_results = st_matrix("r(table)")'
+            over_num    = strtoreal(st_matrixcolstripe("r(table)")[.,2])
             varlist     = tokens(st_global("e(varlist)"))
 
           /* Observations */
@@ -2217,7 +2275,7 @@ mata:
               continue
             }
 
-            pos = rangex(2, groups, 2)
+            pos = selectindex(over_num :== 1)
 
             vi.res.mean[.,i] = mat_results[pos,1]
             vi.res.se[.,i]   = mat_results[pos,2]
@@ -2244,13 +2302,19 @@ mata:
 
               if(bd.opt.weight.survey)
               {
-                vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
-                vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                if(st_numscalar("e(r)") > 1)
+                {
+                  vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
+                  vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                }
               }
               else
               {
-                vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
-                vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                if(st_numscalar("r(r)") > 1)
+                {
+                  vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
+                  vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                }
               }
             }
             else if(bd.opt.test.f_overall)
@@ -2277,6 +2341,9 @@ mata:
               vi.res.nyes[i,.] = mat_results[1,.]
               vi.res.min[i,.]  = mat_results[2,.]
               vi.res.max[i,.]  = mat_results[3,.]
+              vi.res.p25[i,.]  = mat_results[4,.]
+              vi.res.p50[i,.]  = mat_results[5,.]
+              vi.res.p75[i,.]  = mat_results[6,.]
             }
           }
 
@@ -2320,7 +2387,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
 
@@ -2350,7 +2417,7 @@ mata:
 
         /* Count */
 
-          cmd_count = "xi, noomit: tabstat " + vi.term + " if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save by(" + bd.oi.name + ")"
+          cmd_count = "xi, noomit: tabstat " + vi.term + " if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save by(" + bd.oi.name + ")"
 
       /* Calculating Results */
 
@@ -2408,6 +2475,9 @@ mata:
               vi.res.nyes[i,.] = mat_results[1,.]
               vi.res.min[i,.]  = mat_results[2,.]
               vi.res.max[i,.]  = mat_results[3,.]
+              vi.res.p25[i,.]  = mat_results[4,.]
+              vi.res.p50[i,.]  = mat_results[5,.]
+              vi.res.p75[i,.]  = mat_results[6,.]
             }
           }
 
@@ -2419,13 +2489,19 @@ mata:
 
             if(bd.opt.weight.survey)
             {
-              vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("e(F_Pear)"))
-              vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("e(p_Pear)"))
+              if(st_numscalar("e(r)") > 1)
+              {
+                vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("e(F_Pear)"))
+                vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("e(p_Pear)"))
+              }
             }
             else
             {
-              vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("r(chi2)"))
-              vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("r(p)"))
+              if(st_numscalar("r(r)") > 1)
+              {
+                vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("r(chi2)"))
+                vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("r(p)"))
+              }
             }
           }
           else if(bd.opt.test.f_overall)
@@ -2453,7 +2529,7 @@ mata:
           sortResults(bd, vi, 1)
         }
 
-      rc = _stata("drop " + invtokens(over_names))
+      rc = _stata("drop " + invtokens(over_names), 1)
     }
 
 /*======================================================================*/
@@ -2481,7 +2557,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(1, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(1, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(1, vars, .)
 
       /* Defining Commands */
 
@@ -2495,7 +2571,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save")
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save")
 
       /* Calculating Results */
 
@@ -2538,6 +2614,9 @@ mata:
             if(vi.binary) vi.res.nyes = mat_results[1,.]
             vi.res.min = mat_results[2,.]
             vi.res.max = mat_results[3,.]
+            vi.res.p25 = mat_results[4,.]
+            vi.res.p50 = mat_results[5,.]
+            vi.res.p75 = mat_results[6,.]
           }
 
       /* Logit Transform & Sorting */
@@ -2562,6 +2641,7 @@ mata:
       `Boolean' dosd, dotab
       `Tokens'  cmd_mean, cmd_count
       `RealMat' mat_results
+      `RealVec' pos
       `Integer' rc, i
 
       /* Getting Information */
@@ -2573,8 +2653,8 @@ mata:
 
       /* Defining Results */
 
-        vi.res.obs = J(1, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(1, vars, .)
+        vi.res.obs = vi.res.mean = vi.res.se = vi.res.sd = vi.res.var = J(1, vars, 0)
+        vi.res.nyes = vi.res.lci = vi.res.uci = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(1, vars, .)
 
       /* Defining Commands */
 
@@ -2588,7 +2668,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save")
+          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save")
 
       /* Calculating Results */
 
@@ -2599,14 +2679,16 @@ mata:
           if(rc != 0) return
 
           mat_results = st_matrix("r(table)")
+          pos         = strtoreal(subinstr(subinstr(insidepar(tokens(st_global("e(varlist)")), "", "."), "bn", ""), "o", ""))
+          pos         = poslist(vi.levels, pos)
 
-          vi.res.mean = mat_results[1,.]
-          vi.res.se   = mat_results[2,.]
-          vi.res.t    = mat_results[3,.]
-          vi.res.lci  = mat_results[5,.]
-          vi.res.uci  = mat_results[6,.]
-          vi.res.df   = mat_results[7,.]
-          vi.res.obs  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)") : st_matrix("e(_N_subp)")
+          vi.res.mean[pos] = mat_results[1,.]
+          vi.res.se[pos]   = mat_results[2,.]
+          vi.res.t[pos]    = mat_results[3,.]
+          vi.res.lci[pos]  = mat_results[5,.]
+          vi.res.uci[pos]  = mat_results[6,.]
+          vi.res.df[pos]   = mat_results[7,.]
+          vi.res.obs       = (bd.opt.weight.subpop == "") ? J(1, vars, st_matrix("e(_N)")[1]) : J(1, vars, st_matrix("e(_N_subp)")[1])
 
         /* SD & Var */
 
@@ -2614,8 +2696,8 @@ mata:
           {
             checkerr(rc = _stata("estat sd", 1))
 
-            vi.res.sd  = st_matrix("r(sd)")
-            vi.res.var = st_matrix("r(variance)")
+            vi.res.sd[pos]  = st_matrix("r(sd)")
+            vi.res.var[pos] = st_matrix("r(variance)")
           }
 
         /* Count, Min, Max */
@@ -2628,6 +2710,9 @@ mata:
             vi.res.nyes = mat_results[1,.]
             vi.res.min  = mat_results[2,.]
             vi.res.max  = mat_results[3,.]
+            vi.res.p25  = mat_results[4,.]
+            vi.res.p50  = mat_results[5,.]
+            vi.res.p75  = mat_results[6,.]
 
             rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
           }
@@ -2669,7 +2754,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
         vi.res.ind_statistic = vi.res.ind_pvalue = J(lvls * lvls, vars, .)
@@ -2694,7 +2779,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save"), (" by(" + bd.oi.name + ")")
 
       /* Calculating Results */
 
@@ -2815,13 +2900,19 @@ mata:
 
                     if(bd.opt.weight.survey)
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                      if(st_numscalar("e(r)") > 1)
+                      {
+                        vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
+                        vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                      }
                     }
                     else
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                      if(st_numscalar("r(r)") > 1)
+                      {
+                        vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
+                        vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                      }
                     }
                   }
               }
@@ -2870,6 +2961,9 @@ mata:
               if(vi.binary) vi.res.nyes[j,.] = mat_results[1,.]
               vi.res.min[j,.] = mat_results[2,.]
               vi.res.max[j,.] = mat_results[3,.]
+              vi.res.p25[j,.] = mat_results[4,.]
+              vi.res.p50[j,.] = mat_results[5,.]
+              vi.res.p75[j,.] = mat_results[6,.]
             }
 
             if(bd.opt.over.total)
@@ -2879,6 +2973,9 @@ mata:
               if(vi.binary) vi.res.nyes[groups,.] = mat_results[1,.]
               vi.res.min[groups,.] = mat_results[2,.]
               vi.res.max[groups,.] = mat_results[3,.]
+              vi.res.p25[groups,.] = mat_results[4,.]
+              vi.res.p50[groups,.] = mat_results[5,.]
+              vi.res.p75[groups,.] = mat_results[6,.]
             }
           }
 
@@ -2909,7 +3006,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
         vi.res.ind_statistic = vi.res.ind_pvalue = J(lvls * lvls, vars, .)
@@ -2934,7 +3031,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+          cmd_count = ("xi, noomit: tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save"), (" by(" + bd.oi.name + ")")
 
       /* Calculating Results */
 
@@ -2946,7 +3043,7 @@ mata:
 
             if(rc != 0) return
 
-            varlist  = tokens(st_global("e(varlist)"))
+            varlist     = tokens(st_global("e(varlist)"))
             mat_results = st_matrix("r(table)")
             over_names  = st_matrixcolstripe("r(table)")[.,2]
             over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
@@ -2985,6 +3082,9 @@ mata:
                 vi.res.nyes[i,.] = mat_results[1,.]
                 vi.res.min[i,.]  = mat_results[2,.]
                 vi.res.max[i,.]  = mat_results[3,.]
+                vi.res.p25[i,.]  = mat_results[4,.]
+                vi.res.p50[i,.]  = mat_results[5,.]
+                vi.res.p75[i,.]  = mat_results[6,.]
               }
 
               if(bd.opt.over.total)
@@ -2994,6 +3094,9 @@ mata:
                 vi.res.nyes[groups,.] = mat_results[1,.]
                 vi.res.min[groups,.]  = mat_results[2,.]
                 vi.res.max[groups,.]  = mat_results[3,.]
+                vi.res.p25[groups,.]  = mat_results[4,.]
+                vi.res.p50[groups,.]  = mat_results[5,.]
+                vi.res.p75[groups,.]  = mat_results[6,.]
               }
 
               rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
@@ -3096,13 +3199,19 @@ mata:
 
                   if(bd.opt.weight.survey)
                   {
-                    vi.res.ovr_statistic = J(1, vars, st_numscalar("e(F_Pear)"))
-                    vi.res.ovr_pvalue    = J(1, vars, st_numscalar("e(p_Pear)"))
+                    if(st_numscalar("e(r)") > 1)
+                    {
+                      vi.res.ovr_statistic = J(1, vars, st_numscalar("e(F_Pear)"))
+                      vi.res.ovr_pvalue    = J(1, vars, st_numscalar("e(p_Pear)"))
+                    }
                   }
                   else
                   {
-                    vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
-                    vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
+                    if(st_numscalar("r(r)") > 1)
+                    {
+                      vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
+                      vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
+                    }
                   }
                 }
             }
@@ -3150,7 +3259,7 @@ mata:
           sortResults(bd, vi, 1)
         }
 
-      rc = _stata("drop " + invtokens(varlist))
+      rc = _stata("drop " + invtokens(varlist), 1)
     }
 
   /* function : calculateSeriesOverRow16() */
@@ -3178,7 +3287,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
 
@@ -3210,7 +3319,7 @@ mata:
 
         /* Count */
 
-          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save"), (" by(" + bd.oi.name + ")")
+          cmd_count = ("tabstat "), (" if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save"), (" by(" + bd.oi.name + ")")
 
       /* Calculating Results */
 
@@ -3219,7 +3328,6 @@ mata:
           /* Mean (1) */
 
             rc = _stata(cmd_mean + " over(" + vi.varlist[i] + ", nolabel)", 1)
-
             if(rc != 0) continue
 
             mat_results = st_matrix("r(table)")'
@@ -3245,7 +3353,7 @@ mata:
               continue
             }
 
-            pos = rangex(2, groups, 2)
+            pos = selectindex(over_num :== 1)
 
             vi.res.mean[.,i] = mat_results[pos,1]
             vi.res.se[.,i]   = mat_results[pos,2]
@@ -3272,13 +3380,19 @@ mata:
 
               if(bd.opt.weight.survey)
               {
-                vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
-                vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                if(st_numscalar("e(r)") > 1)
+                {
+                  vi.res.ovr_statistic[i] = st_numscalar("e(F_Pear)")
+                  vi.res.ovr_pvalue[i]    = st_numscalar("e(p_Pear)")
+                }
               }
               else
               {
-                vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
-                vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                if(st_numscalar("r(r)") > 1)
+                {
+                  vi.res.ovr_statistic[i] = st_numscalar("r(chi2)")
+                  vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                }
               }
             }
             else if(bd.opt.test.f_overall)
@@ -3305,6 +3419,9 @@ mata:
               vi.res.nyes[i,.] = mat_results[1,.]
               vi.res.min[i,.]  = mat_results[2,.]
               vi.res.max[i,.]  = mat_results[3,.]
+              vi.res.p25[i,.]  = mat_results[4,.]
+              vi.res.p50[i,.]  = mat_results[5,.]
+              vi.res.p75[i,.]  = mat_results[6,.]
             }
           }
 
@@ -3346,7 +3463,7 @@ mata:
       /* Defining Results */
 
         vi.res.obs = J(groups, vars, 0)
-        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.t = vi.res.df = J(groups, vars, .)
+        vi.res.nyes = vi.res.mean = vi.res.lci = vi.res.uci = vi.res.se = vi.res.sd = vi.res.var = vi.res.min = vi.res.max = vi.res.p25 = vi.res.p50 = vi.res.p75 = vi.res.t = vi.res.df = J(groups, vars, .)
 
         vi.res.ovr_statistic = vi.res.ovr_pvalue = J(1, vars, .)
 
@@ -3376,7 +3493,7 @@ mata:
 
         /* Count */
 
-          cmd_count = "xi, noomit: tabstat " + vi.term + " if " + st_local("touse_cnt") + ", stat(sum min max) c(v) save by(" + bd.oi.name + ")"
+          cmd_count = "xi, noomit: tabstat " + vi.term + " if " + st_local("touse_cnt") + ", stat(sum min max p25 p50 p75) c(v) save by(" + bd.oi.name + ")"
 
       /* Calculating Results */
 
@@ -3431,6 +3548,9 @@ mata:
               vi.res.nyes[i,.] = mat_results[1,.]
               vi.res.min[i,.]  = mat_results[2,.]
               vi.res.max[i,.]  = mat_results[3,.]
+              vi.res.p25[i,.]  = mat_results[4,.]
+              vi.res.p50[i,.]  = mat_results[5,.]
+              vi.res.p75[i,.]  = mat_results[6,.]
             }
 
             rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
@@ -3444,13 +3564,19 @@ mata:
 
             if(bd.opt.weight.survey)
             {
-              vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("e(F_Pear)"))
-              vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("e(p_Pear)"))
+              if(st_numscalar("e(r)") > 1)
+              {
+                vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("e(F_Pear)"))
+                vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("e(p_Pear)"))
+              }
             }
             else
             {
-              vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("r(chi2)"))
-              vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("r(p)"))
+              if(st_numscalar("r(r)") > 1)
+              {
+                vi.res.ovr_statistic[.,over_pos] = J(1, len, st_numscalar("r(chi2)"))
+                vi.res.ovr_pvalue[.,over_pos]    = J(1, len, st_numscalar("r(p)"))
+              }
             }
           }
           else if(bd.opt.test.f_overall)

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.7.1  23mar2020}{...}
+{* *! version 1.7.6  09apr2021}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -140,10 +140,13 @@ estimator associated with the sample mean.
 {p2colset 8 14 15 8}{p2col:{opt ci}} confidence interval{p_end}
 {p2colset 8 14 15 8}{p2col:{opt min}} minimum{p_end}
 {p2colset 8 14 15 8}{p2col:{opt max}} maximum{p_end}
+{p2colset 8 14 15 8}{p2col:{opt p25}} 25th percentile (unweighted){p_end}
+{p2colset 8 14 15 8}{p2col:{opt p50}} 50th percentile (unweighted){p_end}
+{p2colset 8 14 15 8}{p2col:{opt p75}} 75th percentile (unweighted){p_end}
 {p2colset 8 14 15 8}{p2col:{opt all}} all of the above{p_end}
 
 {phang}
-{opth format(string)} sets the formatting for statistics. Individual statistics can be formatted using {opth stat(string)} where {opt stat} can be obs, nyes, mean, se, sd, var, ci, min, max, count (obs/nyes), error (se/sd/var), or minmax (min/max). The following options are allowed:
+{opth format(string)} sets the formatting for statistics. Individual statistics can be formatted using {opth stat(string)} where {opt stat} can be obs, nyes, mean, se, sd, var, ci, min, max, p25, p50, p75, count (obs/nyes), error (se/sd/var), or minmax (min/max). The following options are allowed:
 
 {p2colset 8 27 28 8}{p2col:{opt round(#)}} round for both binary and continuous variables. Default is {bf:7}{p_end}
 {p2colset 8 27 28 8}{p2col:{opt roundi(#)}} round for binary variables. Default is {bf:7}{p_end}

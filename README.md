@@ -7,7 +7,7 @@ Stata packages developed by bbradfield for Stata 15+
 | bradsuite    | N/A     | 11/16/17 | Installs all the following brad commands at once      |
 | bradbook     | 1.0.3   | 03/13/18 | Creates a cleaner codebook for export to Word         |
 | bradmean_old | 1.3.8   | 02/16/18 | Computes multiple independent means in a single table |
-| bradmean     | 1.7.1   | 03/23/20 | Computes multiple independent means in a single table |
+| bradmean     | 1.7.6   | 04/09/21 | Computes multiple independent means in a single table |
 | braddes      | 0.2.0   | 03/25/21 | Describe data in a single-line per variable format    |
 
 In the short term, bradmean_old will still be available in case of issues. Bradmean (new) has been tested over 7000 times for errors.
