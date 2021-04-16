@@ -18,7 +18,7 @@ include bradsuite.mata, adopath;
 /*   Stata Functions - bradmean                                         */
 /*======================================================================*/
 
-  program define bradmean_dev, nclass sortpreserve byable(recall);
+  program define bradmean, nclass sortpreserve byable(recall);
   syntax varlist(fv) [if] [in] [fweight aweight pweight iweight/],
     [
       SVY
