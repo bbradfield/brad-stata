@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.7.6                                                **
-**   Date:         04/09/2021                                           **
+**   Version:      1.7.7                                                **
+**   Date:         04/20/2021                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -1472,7 +1472,7 @@ mata:
         vars = length(vi.answers)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -1568,7 +1568,7 @@ mata:
         vars = length(vi.answers)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -1669,7 +1669,7 @@ mata:
         groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -1931,7 +1931,7 @@ mata:
         groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -2203,7 +2203,7 @@ mata:
         groups = length(bd.oi.levels)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -2382,7 +2382,7 @@ mata:
         groups = length(bd.oi.levels)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -2552,7 +2552,7 @@ mata:
         vars = length(vi.answers)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -2649,7 +2649,7 @@ mata:
         vars = length(vi.answers)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -2749,7 +2749,7 @@ mata:
         groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -3001,7 +3001,7 @@ mata:
         groups = (lvls = length(bd.oi.levels)) + bd.opt.over.total
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -3282,7 +3282,7 @@ mata:
         groups = length(bd.oi.levels)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
@@ -3458,7 +3458,7 @@ mata:
         groups = length(bd.oi.levels)
 
         dosd  = anylist(bd.si.name, ("sd", "var"))
-        dotab = anylist(bd.si.name, ("nyes", "min", "max"))
+        dotab = anylist(bd.si.name, ("nyes", "min", "max", "p25", "p50", "p75"))
 
       /* Defining Results */
 
