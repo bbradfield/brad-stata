@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.7.7                                                **
-**   Date:         04/20/2021                                           **
+**   Version:      1.7.8                                                **
+**   Date:         05/06/2021                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -2980,6 +2980,16 @@ mata:
           }
 
       /* Logit Transform & Sorting */
+
+        if(bd.si.ci_proportion)
+        {
+          logitTransform(bd, vi)
+        }
+
+        if(anyof(bd.si.name, bd.opt.display.sort_statistic))
+        {
+          sortResults(bd, vi, 1)
+        }
     }
 
   /* function : calculateXiOverCol16() */
