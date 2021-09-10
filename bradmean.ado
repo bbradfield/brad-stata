@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.7.8                                                **
-**   Date:         05/06/2021                                           **
+**   Version:      1.8.0                                                **
+**   Date:         09/09/2021                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -102,7 +102,7 @@ include bradsuite.mata, adopath;
     mata: initStatInfo(bd);
     mata: gatherResults(bd);
     mata: printer(bd);
-    mata: createExcel(bd);
+    *mata: createExcel(bd);
 
   *----------------------------------------------------------*
   *   06. Cleaning Up                                        *
@@ -1656,11 +1656,8 @@ mata:
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab, doovr, doind
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, term
-      `RealMat' mat_results
+      `RealMat' mat_results, tmp_stats, tmp_pvals
       `RealVec' over_num
-      `Pos'     over_pos
-      `RealMat' test_num
-      `Pos'     test_pos1, test_pos2
       `Integer' rc, i, j
 
       /* Getting Information */
@@ -1716,15 +1713,14 @@ mata:
               mat_results = st_matrix("r(table)")'
 
               over_num = strtoreal(tokens(st_global("e(over_namelist)")))
-              over_pos = selectindex(inlist(bd.oi.levels, over_num))
 
-              vi.res.mean[over_pos,i] = mat_results[.,1]
-              vi.res.se[over_pos,i]   = mat_results[.,2]
-              vi.res.t[over_pos,i]    = mat_results[.,3]
-              vi.res.lci[over_pos,i]  = mat_results[.,5]
-              vi.res.uci[over_pos,i]  = mat_results[.,6]
-              vi.res.df[over_pos,i]   = mat_results[.,7]
-              vi.res.obs[over_pos,i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)")' : st_matrix("e(_N_subp)")'
+              vi.res.mean[over_num,i] = mat_results[.,1]
+              vi.res.se[over_num,i]   = mat_results[.,2]
+              vi.res.t[over_num,i]    = mat_results[.,3]
+              vi.res.lci[over_num,i]  = mat_results[.,5]
+              vi.res.uci[over_num,i]  = mat_results[.,6]
+              vi.res.df[over_num,i]   = mat_results[.,7]
+              vi.res.obs[over_num,i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)")' : st_matrix("e(_N_subp)")'
 
             /* SD & Var */
 
@@ -1732,54 +1728,33 @@ mata:
               {
                 checkerr(rc = _stata("estat sd", 1))
 
-                vi.res.sd[over_pos,i]  = st_matrix("r(sd)")'
-                vi.res.var[over_pos,i] = st_matrix("r(variance)")'
+                vi.res.sd[over_num,i]  = st_matrix("r(sd)")'
+                vi.res.var[over_num,i] = st_matrix("r(variance)")'
               }
 
-            /* Testing */
+            /* Testing (Individual) */
 
-              if(length(over_num) > 1 & (bd.opt.test.overall | bd.opt.test.individual))
+              doind = bd.opt.test.individual
+
+              if((len = length(over_num)) > 1 & doind)
               {
-                doovr = bd.opt.test.overall
-                doind = bd.opt.test.individual
+                tmp_stats = tmp_pvals = J(lvls, lvls, .)
 
-                test_num  = vec(J(lvls, 1, bd.oi.levels)), J(lvls, 1, bd.oi.levels')
-                test_pos1 = selectindex((rowsum(inlist(test_num, over_num)) :== 2) :& (test_num[.,1] :< test_num[.,2]))
-                test_pos2 = vec(rowshape(range(1, lvls * lvls, 1), lvls))[test_pos1]
+                term = ("[" :+ vi.varlist[i] :+ "]") :+ strofreal(over_num)
 
-                /* Chi2 */
+                /* T-Test */
 
-                  if(bd.opt.test.chi_overall & bd.vi.binary & doovr) doovr = 0
-
-                /* T-Test (Overall) */
-
-                  if(bd.opt.test.t_overall & doovr)
+                  if(bd.opt.test.t_individual)
                   {
-                    term = "[" :+ vi.varlist[i] :+ "]"
-                    term = term :+ strofreal(test_num[test_pos1,1]) :+ " - " :+ term :+ strofreal(test_num[test_pos1,2])
-
-                    checkerr(rc = _stata("lincom " + term[1], 1))
-
-                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
-                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-
-                    doovr = 0
-                  }
-
-                /* T-Test (Individual) */
-
-                  if(bd.opt.test.t_individual & doind)
-                  {
-                    term = "[" :+ vi.varlist[i] :+ "]"
-                    term = term :+ strofreal(test_num[test_pos1,1]) :+ " - " :+ term :+ strofreal(test_num[test_pos1,2])
-                    len  = length(term)
-
                     for(j=len; j; j--)
                     {
-                      checkerr(rc = _stata("lincom " + term[j], 1))
+                      for(k=j-1; k; k--)
+                      {
+                        checkerr(rc = _stata("lincom " + term[j] + " - " + term[k], 1))
 
-                      vi.res.ind_statistic[test_pos1[j],i] = vi.res.ind_statistic[test_pos2[j],i] = st_numscalar("r(t)")
-                      vi.res.ind_pvalue[test_pos1[j],i]    = vi.res.ind_pvalue[test_pos2[j],i]    = st_numscalar("r(p)")
+                        tmp_stats[over_num[j],over_num[k]] = tmp_stats[over_num[k],over_num[j]] = st_numscalar("r(t)")
+                        tmp_pvals[over_num[j],over_num[k]] = tmp_pvals[over_num[k],over_num[j]] = st_numscalar("r(p)")
+                      }
                     }
 
                     doind = 0
@@ -1787,32 +1762,32 @@ mata:
 
                 /* F-Test */
 
-                  if((bd.opt.test.f_overall & doovr) | (bd.opt.test.f_individual & doind))
+                  if(bd.opt.test.f_individual & doind)
                   {
-                    term = "[" :+ vi.varlist[i] :+ "]"
-                    term = "(" :+ term :+ strofreal(test_num[test_pos1,1]) :+ " == " :+ term :+ strofreal(test_num[test_pos1,2]) :+ ")"
-                    term = invtokens(term')
-
-                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
-
-                    if(bd.opt.test.f_overall & doovr)
+                    for(j=len; j; j--)
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("r(F)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-                    }
+                      checkerr(rc = _stata("test " + term[j] + " == " + invtokens(term, " == ") + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
 
-                    if(bd.opt.test.f_individual & doind)
-                    {
                       mat_results = st_matrix("r(mtest)")
 
-                      vi.res.ind_statistic[test_pos1,i] = vi.res.ind_statistic[test_pos2,i] = mat_results[.,1]
-                      vi.res.ind_pvalue[test_pos1,i]    = vi.res.ind_pvalue[test_pos2,i]    = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3] : mat_results[.,4]
+                      tmp_stats[over_num[j],over_num] = mat_results[.,1]'
+                      tmp_pvals[over_num[j],over_num] = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3]' : mat_results[.,4]'
                     }
                   }
 
-                /* Chi2 (2) */
+                vi.res.ind_statistic[.,i] = colshape(tmp_stats, 1)
+                vi.res.ind_pvalue[.,i]    = colshape(tmp_pvals, 1)
+              }
 
-                  if(bd.opt.test.chi_overall & bd.vi.binary & bd.opt.test.overall)
+            /* Testing (Overall) */
+
+              doovr = bd.opt.test.overall
+
+              if((len = length(over_num)) > 1 & doovr)
+              {
+                /* Chi2 */
+
+                  if(bd.opt.test.chi_overall & bd.vi.binary)
                   {
                     checkerr(rc = _stata(cmd_tab2[1] + vi.varlist[i] + cmd_tab2[2], 1))
 
@@ -1832,6 +1807,34 @@ mata:
                         vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
                       }
                     }
+
+                    doovr = 0
+                  }
+
+                /* T-Test */
+
+                  if(bd.opt.test.t_overall & doovr)
+                  {
+                    term = "[" :+ vi.varlist[i] :+ "]"
+
+                    checkerr(rc = _stata("lincom " + term :+ strofreal(over_num[1]) :+ " - " :+ term :+ strofreal(over_num[2]), 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+
+                    doovr = 0
+                  }
+
+                /* F-Test */
+
+                  if(bd.opt.test.f_overall & doovr)
+                  {
+                    term = ("[" :+ vi.varlist[i] :+ "]") :+ strofreal(over_num)
+
+                    checkerr(rc = _stata("test " + invtokens(term, " == ") + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
                   }
               }
 
@@ -1918,11 +1921,9 @@ mata:
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab, doovr, doind
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, term, varlist
-      `RealMat' mat_results
+      `RealMat' mat_results, tmp_stats, tmp_pvals
       `RealVec' over_num
       `Pos'     over_pos
-      `RealMat' test_num
-      `Pos'     test_pos1, test_pos2
       `Integer' rc, i, j
 
       /* Getting Information */
@@ -2029,56 +2030,36 @@ mata:
               }
             }
 
-          /* Testing */
+          /* Testing (Individual) */
 
-            if(length(over_num) > 1 & (bd.opt.test.overall | bd.opt.test.individual))
+            doind = bd.opt.test.individual
+
+            if(len > 1 & doind)
             {
-              doovr = bd.opt.test.overall
-              doind = bd.opt.test.individual
+              tmp_stats = tmp_pvals = J(lvls, lvls, .)
 
-              test_num  = vec(J(lvls, 1, bd.oi.levels)), J(lvls, 1, bd.oi.levels')
-              test_pos1 = selectindex((rowsum(inlist(test_num, over_num)) :== 2) :& (test_num[.,1] :< test_num[.,2]))
-              test_pos2 = vec(rowshape(range(1, lvls * lvls, 1), lvls))[test_pos1]
+              /* T-Test */
 
-              /* Chi2 (1) */
-
-                if(bd.opt.test.chi_overall & doovr) doovr = 0
-
-              /* T-Test (Overall) */
-
-                if(bd.opt.test.t_overall & doovr)
-                {
-                  term = "[" :+ varlist :+ "]"
-                  term = term :+ strofreal(test_num[test_pos1,1]) :+ " - " :+ term :+ strofreal(test_num[test_pos1,2])
-
-                  for(i=vars; i; i--)
-                  {
-                    checkerr(rc = _stata("lincom " + term[i], 1))
-
-                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
-                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-                  }
-
-                  doovr = 0
-                }
-
-              /* T-Test (Individual) */
-
-                if(bd.opt.test.t_individual & doind)
+                if(bd.opt.test.t_individual)
                 {
                   for(i=vars; i; i--)
                   {
-                    term = "[" :+ varlist[i] :+ "]"
-                    term = term :+ strofreal(test_num[test_pos1,1]) :+ " - " :+ term :+ strofreal(test_num[test_pos1,2])
-                    len  = length(term)
+                    tmp_stats = tmp_pvals = J(lvls, lvls, .)
+                    term      = "[" :+ varlist[i] :+ "]" :+ strofreal(over_num)
 
                     for(j=len; j; j--)
                     {
-                      checkerr(rc = _stata("lincom " + term[j], 1))
+                      for(k=j-1; k; k--)
+                      {
+                        checkerr(rc = _stata("lincom " + term[j] + " - " + term[k], 1))
 
-                      vi.res.ind_statistic[test_pos1[j],i] = vi.res.ind_statistic[test_pos2[j],i] = st_numscalar("r(t)")
-                      vi.res.ind_pvalue[test_pos1[j],i]    = vi.res.ind_pvalue[test_pos2[j],i]    = st_numscalar("r(p)")
+                        tmp_stats[over_pos[j],over_pos[k]] = tmp_stats[over_pos[k],over_pos[j]] = st_numscalar("r(t)")
+                        tmp_pvals[over_pos[j],over_pos[k]] = tmp_pvals[over_pos[k],over_pos[j]] = st_numscalar("r(p)")
+                      }
                     }
+
+                    vi.res.ind_statistic[.,i] = colshape(tmp_stats, 1)
+                    vi.res.ind_pvalue[.,i]    = colshape(tmp_pvals, 1)
                   }
 
                   doind = 0
@@ -2086,35 +2067,38 @@ mata:
 
               /* F-Test */
 
-                if((bd.opt.test.f_overall & doovr) | (bd.opt.test.f_individual & doind))
+                if(bd.opt.test.f_individual & doind)
                 {
                   for(i=vars; i; i--)
                   {
-                    term = "[" :+ varlist[i] :+ "]"
-                    term = "(" :+ term :+ strofreal(test_num[test_pos1,1]) :+ " == " :+ term :+ strofreal(test_num[test_pos1,2]) :+ ")"
-                    term = invtokens(term')
+                    tmp_stats = tmp_pvals = J(lvls, lvls, .)
+                    term      = "[" :+ varlist[i] :+ "]" :+ strofreal(over_num)
 
-                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
-
-                    if(bd.opt.test.f_overall & doovr)
+                    for(j=len; j; j--)
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("r(F)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-                    }
+                      checkerr(rc = _stata("test " + term[j] + " == " + invtokens(term, " == ") + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
 
-                    if(bd.opt.test.f_individual & doind)
-                    {
                       mat_results = st_matrix("r(mtest)")
 
-                      vi.res.ind_statistic[test_pos1,i] = vi.res.ind_statistic[test_pos2,i] = mat_results[.,1]
-                      vi.res.ind_pvalue[test_pos1,i]    = vi.res.ind_pvalue[test_pos2,i]    = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3] : mat_results[.,4]
+                      tmp_stats[over_pos[j],over_pos] = mat_results[.,1]'
+                      tmp_pvals[over_pos[j],over_pos] = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3]' : mat_results[.,4]'
                     }
+
+                    vi.res.ind_statistic[.,i] = colshape(tmp_stats, 1)
+                    vi.res.ind_pvalue[.,i]    = colshape(tmp_pvals, 1)
                   }
                 }
+            }
 
-              /* Chi2 (2) */
+          /* Testing (Overall) */
 
-                if(bd.opt.test.chi_overall & bd.opt.test.overall)
+            doovr = bd.opt.test.overall
+
+            if(len > 1 & doovr)
+            {
+              /* Chi2 */
+
+                if(bd.opt.test.chi_overall)
                 {
                   checkerr(rc = _stata(cmd_tab2[1] + vi.varlist + cmd_tab2[2], 1))
 
@@ -2133,6 +2117,42 @@ mata:
                       vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
                       vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
                     }
+                  }
+
+                  doovr = 0
+                }
+
+              /* T-Test */
+
+                if(bd.opt.test.t_overall & doovr)
+                {
+                  term = "[" :+ varlist' :+ "]"
+                  term = "lincom " :+ term :+ strofreal(over_num[1]) :+ " - " :+ term :+ strofreal(over_num[2])
+
+                  for(i=vars; i; i--)
+                  {
+                    checkerr(rc = _stata(term[i], 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  }
+
+                  doovr = 0
+                }
+
+              /* F-Test */
+
+                if(bd.opt.test.f_overall & doovr)
+                {
+                  for(i=vars; i; i--)
+                  {
+                    term = "[" :+ varlist[i] :+ "]" :+ strofreal(over_num)
+                    term = invtokens(term, " == ")
+
+                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
                   }
                 }
             }
@@ -2736,11 +2756,10 @@ mata:
                                            struct varInfo  scalar vi)
     {
       `Integer' vars, lvls, groups, len
-      `Boolean' dosd, dotab, doovr, doind
+      `Boolean' dosd, dotab
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term
-      `RealMat' mat_results
+      `RealMat' mat_results, tmp_stats, tmp_pvals
       `RealVec' over_num
-      `Pos'     over_pos, test_pos1, test_pos2
       `Integer' rc, i, j, k
 
       /* Getting Information */
@@ -2796,16 +2815,14 @@ mata:
               mat_results = st_matrix("r(table)")'
               over_names  = st_matrixcolstripe("r(table)")[.,2]
               over_num    = strtoreal(subinstr(subinstr(insidepar(over_names, "@", "."), "bn", ""), "o", ""))
-              over_pos    = selectindex(inlist(bd.oi.levels, over_num))
-              over_num    = rangex(1, length(over_num), 1)'
 
-              vi.res.mean[over_pos,i] = mat_results[.,1]
-              vi.res.se[over_pos,i]   = mat_results[.,2]
-              vi.res.t[over_pos,i]    = mat_results[.,3]
-              vi.res.lci[over_pos,i]  = mat_results[.,5]
-              vi.res.uci[over_pos,i]  = mat_results[.,6]
-              vi.res.df[over_pos,i]   = mat_results[.,7]
-              vi.res.obs[over_pos,i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)")' : st_matrix("e(_N_subp)")'
+              vi.res.mean[over_num,i] = mat_results[.,1]
+              vi.res.se[over_num,i]   = mat_results[.,2]
+              vi.res.t[over_num,i]    = mat_results[.,3]
+              vi.res.lci[over_num,i]  = mat_results[.,5]
+              vi.res.uci[over_num,i]  = mat_results[.,6]
+              vi.res.df[over_num,i]   = mat_results[.,7]
+              vi.res.obs[over_num,i]  = (bd.opt.weight.subpop == "") ? st_matrix("e(_N)")' : st_matrix("e(_N_subp)")'
 
             /* SD & Var */
 
@@ -2813,56 +2830,31 @@ mata:
               {
                 checkerr(rc = _stata("estat sd", 1))
 
-                vi.res.sd[over_pos,i]  = st_matrix("r(sd)")'
-                vi.res.var[over_pos,i] = st_matrix("r(variance)")'
+                vi.res.sd[over_num,i]  = st_matrix("r(sd)")'
+                vi.res.var[over_num,i] = st_matrix("r(variance)")'
               }
 
-            /* Testing */
+            /* Testing (Individual) */
 
-              if((len = length(over_num)) > 1 & (bd.opt.test.overall | bd.opt.test.individual))
+              doind = bd.opt.test.individual
+
+              if((len = length(over_num)) > 1 & doind)
               {
-                doovr = bd.opt.test.overall
-                doind = bd.opt.test.individual
+                tmp_stats = tmp_pvals = J(lvls, lvls, .)
 
-                test_pos1 = vec(J(len, 1, over_num)), J(len, 1, over_num')
-                test_pos1 = test_pos1[selectindex(test_pos1[.,1] :< test_pos1[.,2]),.]
+                /* T-Test */
 
-                test_pos2 = vec(J(len, 1, over_pos)), J(len, 1, over_pos')
-                test_pos2 = test_pos2[selectindex(test_pos2[.,1] :< test_pos2[.,2]),.]
-                test_pos2 = (((test_pos2[.,1] :- 1) :* lvls) :+ test_pos2[.,2]), (((test_pos2[.,2] :- 1) :* lvls) :+ test_pos2[.,1])
-
-                len = rows(test_pos1)
-
-                /* Chi2 */
-
-                  if(bd.opt.test.chi_overall & bd.vi.binary & doovr) doovr = 0
-
-                /* T-Test (Overall) */
-
-                  if(bd.opt.test.t_overall & doovr)
+                  if(bd.opt.test.t_individual)
                   {
-                    term = over_names[1] + " - " + over_names[2]
-
-                    checkerr(rc = _stata("lincom " + term[1], 1))
-
-                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
-                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-
-                    doovr = 0
-                  }
-
-                /* T-Test (Individual) */
-
-                  if(bd.opt.test.t_individual & doind)
-                  {
-                    term = "lincom " :+ over_names[test_pos1[.,1]] :+ " - " :+ over_names[test_pos1[.,2]]
-
                     for(j=len; j; j--)
                     {
-                      checkerr(rc = _stata(term[j], 1))
+                      for(k=j-1; k; k--)
+                      {
+                        checkerr(rc = _stata("lincom " + over_names[j] + " - " + over_names[k], 1))
 
-                      vi.res.ind_statistic[test_pos2[j,1],i] = vi.res.ind_statistic[test_pos2[j,2],i] = st_numscalar("r(t)")
-                      vi.res.ind_pvalue[test_pos2[j,1],i]    = vi.res.ind_pvalue[test_pos2[j,2],i]    = st_numscalar("r(p)")
+                        tmp_stats[over_num[j],over_num[k]] = tmp_stats[over_num[k],over_num[j]] = st_numscalar("r(t)")
+                        tmp_pvals[over_num[j],over_num[k]] = tmp_pvals[over_num[k],over_num[j]] = st_numscalar("r(p)")
+                      }
                     }
 
                     doind = 0
@@ -2870,31 +2862,34 @@ mata:
 
                 /* F-Test */
 
-                  if((bd.opt.test.f_overall & doovr) | (bd.opt.test.f_individual & doind))
+                  if(bd.opt.test.f_individual & doind)
                   {
-                    term = "(" :+ over_names[test_pos1[.,1]] :+ " == " :+ over_names[test_pos1[.,2]] :+ ")"
-                    term = invtokens(term')
+                    term = invtokens(over_names', " == ")
 
-                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
-
-                    if(bd.opt.test.f_overall & doovr)
+                    for(j=len; j; j--)
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("r(F)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-                    }
+                      checkerr(rc = _stata("test " + over_names[j] + " == " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
 
-                    if(bd.opt.test.f_individual & doind)
-                    {
                       mat_results = st_matrix("r(mtest)")
 
-                      vi.res.ind_statistic[test_pos2[.,1],i] = vi.res.ind_statistic[test_pos2[.,2],i] = mat_results[.,1]
-                      vi.res.ind_pvalue[test_pos2[.,1],i]    = vi.res.ind_pvalue[test_pos2[.,2],i]    = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3] : mat_results[.,4]
+                      tmp_stats[over_num[j],over_num] = mat_results[.,1]'
+                      tmp_pvals[over_num[j],over_num] = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3]' : mat_results[.,4]'
                     }
                   }
 
-                /* Chi2 (2) */
+                vi.res.ind_statistic[.,i] = colshape(tmp_stats, 1)
+                vi.res.ind_pvalue[.,i]    = colshape(tmp_pvals, 1)
+              }
 
-                  if(bd.opt.test.chi_overall & bd.vi.binary & bd.opt.test.overall)
+            /* Testing (Overall) */
+
+              doovr = bd.opt.test.overall
+
+              if((len = length(over_num)) > 1 & doovr)
+              {
+                /* Chi2 */
+
+                  if(bd.opt.test.chi_overall & bd.vi.binary)
                   {
                     checkerr(rc = _stata(cmd_tab2[1] + vi.varlist[i] + cmd_tab2[2], 1))
 
@@ -2914,6 +2909,30 @@ mata:
                         vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
                       }
                     }
+
+                    doovr = 0
+                  }
+
+                /* T-Test */
+
+                  if(bd.opt.test.t_overall & doovr)
+                  {
+                    checkerr(rc = _stata("lincom " + over_names[1] + " - " + over_names[2], 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+
+                    doovr = 0
+                  }
+
+                /* F-Test */
+
+                  if(bd.opt.test.f_overall & doovr)
+                  {
+                    checkerr(rc = _stata("test " + invtokens(over_names', " == ") + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
                   }
               }
 
@@ -3000,9 +3019,9 @@ mata:
       `Integer' vars, lvls, groups, len
       `Boolean' dosd, dotab, doovr, doind
       `Tokens'  cmd_mean, cmd_tab2, cmd_count, over_names, term, varlist
-      `RealMat' mat_results
+      `RealMat' mat_results, tmp_stats, tmp_pvals
       `RealVec' over_num
-      `Pos'     over_pos, test_pos1, test_pos2
+      `Pos'     over_pos
       `Integer' rc, i, j
 
       /* Getting Information */
@@ -3112,60 +3131,36 @@ mata:
               rc = _stata("drop `_dta[__xi__Vars__To__Drop__]'", 1)
             }
 
-          /* Testing */
+          /* Testing (Individual) */
 
-            if(length(over_num) > 1 & (bd.opt.test.overall | bd.opt.test.individual))
+            doind = bd.opt.test.individual
+
+            if(len > 1 & doind)
             {
-              doovr = bd.opt.test.overall
-              doind = bd.opt.test.individual
+              tmp_stats = tmp_pvals = J(lvls, lvls, .)
 
-              test_pos1 = vec(J(len, 1, over_num)), J(len, 1, over_num')
-              test_pos1 = test_pos1[selectindex(test_pos1[.,1] :< test_pos1[.,2]),.]
+              /* T-Test */
 
-              test_pos2 = vec(J(len, 1, over_pos)), J(len, 1, over_pos')
-              test_pos2 = test_pos2[selectindex(test_pos2[.,1] :< test_pos2[.,2]),.]
-              test_pos2 = (((test_pos2[.,1] :- 1) :* lvls) :+ test_pos2[.,2]), (((test_pos2[.,2] :- 1) :* lvls) :+ test_pos2[.,1])
-
-              len = rows(test_pos1)
-
-              /* Chi2 (1) */
-
-                if(bd.opt.test.chi_overall & doovr) doovr = 0
-
-              /* T-Test (Overall) */
-
-                if(bd.opt.test.t_overall & doovr)
-                {
-                  term = colshape(over_names, 2)
-                  term = "lincom " :+ term[.,1] :+ " - " :+ term[.,2]
-
-                  for(i=vars; i; i--)
-                  {
-                    checkerr(rc = _stata(term[i], 1))
-
-                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
-                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-                  }
-
-                  doovr = 0
-                }
-
-              /* T-Test (Individual) */
-
-                if(bd.opt.test.t_individual & doind)
+                if(bd.opt.test.t_individual)
                 {
                   for(i=vars; i; i--)
                   {
-                    term = over_names[(over_num :+ ((i-1) :* lvls))]
-                    term = "lincom " :+ term[test_pos1[.,1]] :+ " - " :+ term[test_pos1[.,2]]
+                    tmp_stats = tmp_pvals = J(lvls, lvls, .)
+                    term      = over_names[(over_num :+ ((i-1) :* len))]
 
                     for(j=len; j; j--)
                     {
-                      checkerr(rc = _stata(term[j], 1))
+                      for(k=j-1; k; k--)
+                      {
+                        checkerr(rc = _stata("lincom " + term[j] + " - " + term[k], 1))
 
-                      vi.res.ind_statistic[test_pos2[j,1],i] = vi.res.ind_statistic[test_pos2[j,2],i] = st_numscalar("r(t)")
-                      vi.res.ind_pvalue[test_pos2[j,1],i]    = vi.res.ind_pvalue[test_pos2[j,2],i]    = st_numscalar("r(p)")
+                        tmp_stats[over_pos[j],over_pos[k]] = tmp_stats[over_pos[k],over_pos[j]] = st_numscalar("r(t)")
+                        tmp_pvals[over_pos[j],over_pos[k]] = tmp_pvals[over_pos[k],over_pos[j]] = st_numscalar("r(p)")
+                      }
                     }
+
+                    vi.res.ind_statistic[.,i] = colshape(tmp_stats, 1)
+                    vi.res.ind_pvalue[.,i]    = colshape(tmp_pvals, 1)
                   }
 
                   doind = 0
@@ -3173,37 +3168,38 @@ mata:
 
               /* F-Test */
 
-                if((bd.opt.test.f_overall & doovr) | (bd.opt.test.f_individual & doind))
+                if(bd.opt.test.f_individual & doind)
                 {
-                  len = length(over_num)
-
                   for(i=vars; i; i--)
                   {
-                    term = over_names[(over_num :+ ((i-1) :* len))]
-                    term = "(" :+ term[test_pos1[.,1]] :+ " == " :+ term[test_pos1[.,2]] :+ ")"
-                    term = invtokens(term')
+                    tmp_stats = tmp_pvals = J(lvls, lvls, .)
+                    term      = over_names[(over_num :+ ((i-1) :* len))]
 
-                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
-
-                    if(bd.opt.test.f_overall & doovr)
+                    for(j=len; j; j--)
                     {
-                      vi.res.ovr_statistic[i] = st_numscalar("r(F)")
-                      vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
-                    }
+                      checkerr(rc = _stata("test " + term[j] + " == " + invtokens(term', " == ") + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
 
-                    if(bd.opt.test.f_individual & doind)
-                    {
                       mat_results = st_matrix("r(mtest)")
 
-                      vi.res.ind_statistic[test_pos2[.,1],i] = vi.res.ind_statistic[test_pos2[.,2],i] = mat_results[.,1]
-                      vi.res.ind_pvalue[test_pos2[.,1],i]    = vi.res.ind_pvalue[test_pos2[.,2],i]    = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3] : mat_results[.,4]
+                      tmp_stats[over_pos[j],over_pos] = mat_results[.,1]'
+                      tmp_pvals[over_pos[j],over_pos] = (bd.opt.test.f_mtest == "noadjust") ? mat_results[.,3]' : mat_results[.,4]'
                     }
+
+                    vi.res.ind_statistic[.,i] = colshape(tmp_stats, 1)
+                    vi.res.ind_pvalue[.,i]    = colshape(tmp_pvals, 1)
                   }
                 }
+            }
 
-              /* Chi2 (2) */
+          /* Testing (Overall) */
 
-                if(bd.opt.test.chi_overall & bd.opt.test.overall)
+            doovr = bd.opt.test.overall
+
+            if(len > 1 & doovr)
+            {
+              /* Chi2 */
+
+                if(bd.opt.test.chi_overall)
                 {
                   checkerr(rc = _stata(cmd_tab2[1] + vi.varlist + cmd_tab2[2], 1))
 
@@ -3222,6 +3218,42 @@ mata:
                       vi.res.ovr_statistic = J(1, vars, st_numscalar("r(chi2)"))
                       vi.res.ovr_pvalue    = J(1, vars, st_numscalar("r(p)"))
                     }
+                  }
+
+                  doovr = 0
+                }
+
+              /* T-Test */
+
+                if(bd.opt.test.t_overall & doovr)
+                {
+                  term = colshape(over_names, 2)
+                  term = "lincom " :+ term[.,1] :+ " - " :+ term[.,2]
+
+                  for(i=vars; i; i--)
+                  {
+                    checkerr(rc = _stata(term[i], 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(t)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
+                  }
+
+                  doovr = 0
+                }
+
+              /* F-Test */
+
+                if(bd.opt.test.f_overall & doovr)
+                {
+                  for(i=vars; i; i--)
+                  {
+                    term = over_names[(over_num :+ ((i-1) :* len))]
+                    term = invtokens(term', " == ")
+
+                    checkerr(rc = _stata("test " + term + ", mtest(" + bd.opt.test.f_mtest + ")", 1))
+
+                    vi.res.ovr_statistic[i] = st_numscalar("r(F)")
+                    vi.res.ovr_pvalue[i]    = st_numscalar("r(p)")
                   }
                 }
             }
