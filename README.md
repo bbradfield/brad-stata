@@ -1,5 +1,5 @@
 # brad-stata
-Stata packages developed by bbradfield for Stata 15+
+Stata packages developed by RTI's bbradfield for Stata 15+
 
 ## Packages
 | Package Name | Version | Date     | Description                                           |
@@ -30,4 +30,4 @@ adoupdate, update
 
 ## On Naming
 
-I am not creative.
+BRADsuite was originally developed as a series of internal tools for RTI research and development. Its name connotes its purposes and origins for use in Business Research And Development.
