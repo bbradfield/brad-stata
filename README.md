@@ -30,4 +30,4 @@ adoupdate, update
 
 ## On Naming
 
-BRADsuite was originally developed as a series of internal tools for RTI research and development. Its name connotes its purposes and origins for use in Business Research And Development.
+BRADsuite was originally developed as a series of internal tools for RTI research and development. Its name connotes its purposes and origins for use in business research and development (BRAD).
