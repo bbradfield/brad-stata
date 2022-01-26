@@ -10,8 +10,6 @@ Stata packages developed by RTI's bbradfield for Stata 15+
 | bradmean     | 1.8.1   | 10/05/21 | Computes multiple independent means in a single table |
 | braddes      | 0.2.0   | 03/25/21 | Describe data in a single-line per variable format    |
 
-In the short term, bradmean_old will still be available in case of issues. Bradmean (new) has been tested over 7000 times for errors.
-
 ## Install
 To install from Github, copy and paste the following code:
 ```
