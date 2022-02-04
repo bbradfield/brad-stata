@@ -19,7 +19,7 @@ To install from Github, copy and paste the following code:
 ```
 . net install <package>, from(https://raw.github.com/bbradfield/brad-stata/master/) replace
 ```
-To install manually, download the .ado and .sthlp files and place them in the following directory:
+To install manually, download the .ado, .sthlp, and bradsuite.mata files and place them in the following directory:
 ```
 ~/ado/plus/b/
 ```
