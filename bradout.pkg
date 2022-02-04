@@ -1,0 +1,16 @@
+d 'bradout': outputs multiple estimation results in a clean table
+d
+d   Outputs multiple estimation results in a clean table
+d
+d Version 1.0.0
+d
+d Distribution-Date: 03feb2022
+d
+d Author: Brian Bradfield
+d Support: email bbradfield@rti.org
+d
+f bradout.ado
+f bradout.sthlp
+f bradsto.ado
+f bradsto.sthlp
+f bradsuite.mata
