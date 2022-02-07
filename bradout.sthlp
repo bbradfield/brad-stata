@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  03feb2022}{...}
+{* *! version 1.0.1  07feb2022}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradout##syntax"}{...}
 {viewerjumpto "Description" "bradout##description"}{...}
@@ -31,9 +31,9 @@
 {synopt:{opth order(string)}}choose which covariates are displayed first{p_end}
 {synopt:{opth drop(string)}}choose which covariates to drop, while keeping all others{p_end}
 {synopt:{opth keep(string)}}choose which covariates to keep, while dropping all others{p_end}
-{synopt:{opt nobase:s}}do not display base levels of covariates CHECK THIS{p_end}
+{synopt:{opt nobase:s}}do not display base levels of covariates{p_end}
 {synopt:{opt noomit:s}}do not display omitted covariates{p_end}
-{synopt:{opt noref:s}}do not display variable header for categorical variables CHECK THIS{p_end}
+{synopt:{opt noref:s}}do not display variable header for categorical variables{p_end}
 
 {syntab:Labelling}
 {synopt:{opth collab:els(string)}}specify column labels{p_end}
@@ -85,33 +85,78 @@
 {phang}
 {opth mstat:s(string)} allows users to choose from the following model statistics:
 
-{p2colset 8 17 15 8}{p2col:{opt n}} number of observations{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_yes}} number of yes's{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_pop}} size of population{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_strata}} number of strata{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_clust}} number of clusters{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_psu}} number of primary sampling units{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_cds}} number of completely determined successes{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_cdf}} number of completely determined failures{p_end}
-{p2colset 8 17 15 8}{p2col:{opt n_cd}} number of completely determined observations{p_end}
-{p2colset 8 17 15 8}{p2col:{opt df_m}} model degrees of freedom{p_end}
-{p2colset 8 17 15 8}{p2col:{opt mss}} model sum of squares{p_end}
-{p2colset 8 17 15 8}{p2col:{opt df_r}} residual degrees of freedom{p_end}
-{p2colset 8 17 15 8}{p2col:{opt rss}} residual sum of squares{p_end}
-{p2colset 8 17 15 8}{p2col:{opt rmse}} root mean squared error{p_end}
-{p2colset 8 17 15 8}{p2col:{opt r2}} R-squared{p_end}
-{p2colset 8 17 15 8}{p2col:{opt r2_a}} adjusted R-squared{p_end}
-{p2colset 8 17 15 8}{p2col:{opt r2_p}} pseudo R-squared{p_end}
-{p2colset 8 17 15 8}{p2col:{opt ll}} log likelihood{p_end}
-{p2colset 8 17 15 8}{p2col:{opt ll0}} log likelihood, constant-only model{p_end}
-{p2colset 8 17 15 8}{p2col:{opt aic}} Akaike’s information criterion{p_end}
-{p2colset 8 17 15 8}{p2col:{opt bic}} Bayesian information criterion{p_end}
-{p2colset 8 17 15 8}{p2col:{opt f}} F statistic{p_end}
-{p2colset 8 17 15 8}{p2col:{opt chi2}} chi-squared{p_end}
-{p2colset 8 17 15 8}{p2col:{opt p}} p-value for model test{p_end}
-{p2colset 8 17 15 8}{p2col:{opt k}} number of parameters{p_end}
-{p2colset 8 17 15 8}{p2col:{opt ic}} number of iterations{p_end}
-{p2colset 8 17 15 8}{p2col:{opt rank}} rank of e(V){p_end}
+{p2colset 8 22 15 8}{p2col:{opt n}} number of observations{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_sub}} number of observations in subpopulation{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_yes}} number of yes's{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_pop}} size of population{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_subpop}} size of subpopulation{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_psu}} number of primary sampling units{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_strata}} number of strata{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_strata_omit}} number of omitted strata{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_clust}} number of clusters{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_cds}} number of completely determined successes{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_cdf}} number of completely determined failures{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_cd}} number of completely determined observations{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_g}} number of groups{p_end}
+{p2colset 8 22 15 8}{p2col:{opt g_min}} minimum group size{p_end}
+{p2colset 8 22 15 8}{p2col:{opt g_avg}} average group size{p_end}
+{p2colset 8 22 15 8}{p2col:{opt g_max}} maximum group size{p_end}
+{p2colset 8 22 15 8}{p2col:{opt tbar}} harmonic mean of group sizes{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_drop}} number of dropped observations{p_end}
+{p2colset 8 22 15 8}{p2col:{opt g_drop}} number of dropped groups{p_end}
+{p2colset 8 22 15 8}{p2col:{opt mss}} model sum of squares{p_end}
+{p2colset 8 22 15 8}{p2col:{opt rss}} residual sum of squares{p_end}
+{p2colset 8 22 15 8}{p2col:{opt tss}} total sum of squares{p_end}
+{p2colset 8 22 15 8}{p2col:{opt df_m}} model degrees of freedom{p_end}
+{p2colset 8 22 15 8}{p2col:{opt df_r}} residual degrees of freedom{p_end}
+{p2colset 8 22 15 8}{p2col:{opt df_pear}} degrees of freedom for Pearson chi2{p_end}
+{p2colset 8 22 15 8}{p2col:{opt df_a}} degrees of freedom for absorbed effect{p_end}
+{p2colset 8 22 15 8}{p2col:{opt df_b}} numerator degrees of freedom for F statistic{p_end}
+{p2colset 8 22 15 8}{p2col:{opt rmse}} root mean squared error{p_end}
+{p2colset 8 22 15 8}{p2col:{opt rank}} rank of e(V){p_end}
+{p2colset 8 22 15 8}{p2col:{opt rank0}} rank of e(V) for constant-only model{p_end}
+{p2colset 8 22 15 8}{p2col:{opt rho}} rho{p_end}
+{p2colset 8 22 15 8}{p2col:{opt sigma_u}} panel-level standard deviation{p_end}
+{p2colset 8 22 15 8}{p2col:{opt sigma}} ancillary parameter{p_end}
+{p2colset 8 22 15 8}{p2col:{opt sigma_e}} standard deviation of the error term (epsilon){p_end}
+{p2colset 8 22 15 8}{p2col:{opt deviance}} deviance{p_end}
+{p2colset 8 22 15 8}{p2col:{opt dispers}} deviance dispersion{p_end}
+{p2colset 8 22 15 8}{p2col:{opt corr}} correlation{p_end}
+{p2colset 8 22 15 8}{p2col:{opt r2}} R-squared{p_end}
+{p2colset 8 22 15 8}{p2col:{opt r2_a}} adjusted R-squared{p_end}
+{p2colset 8 22 15 8}{p2col:{opt r2_p}} pseudo R-squared{p_end}
+{p2colset 8 22 15 8}{p2col:{opt r2_w}} R-squared for within model{p_end}
+{p2colset 8 22 15 8}{p2col:{opt r2_o}} R-squared for overall model{p_end}
+{p2colset 8 22 15 8}{p2col:{opt r2_b}} R-squared for between model{p_end}
+{p2colset 8 22 15 8}{p2col:{opt ll}} log likelihood{p_end}
+{p2colset 8 22 15 8}{p2col:{opt ll0}} log likelihood, constant-only model{p_end}
+{p2colset 8 22 15 8}{p2col:{opt llc}} log likelihood, comparison model{p_end}
+{p2colset 8 22 15 8}{p2col:{opt aic}} Akaike’s information criterion{p_end}
+{p2colset 8 22 15 8}{p2col:{opt bic}} Bayesian information criterion{p_end}
+{p2colset 8 22 15 8}{p2col:{opt thta_min}} minimum theta{p_end}
+{p2colset 8 22 15 8}{p2col:{opt thta_5}} 5th percentile theta{p_end}
+{p2colset 8 22 15 8}{p2col:{opt thta_50}} 50th percentile theta{p_end}
+{p2colset 8 22 15 8}{p2col:{opt thta_95}} 95th percentile theta{p_end}
+{p2colset 8 22 15 8}{p2col:{opt thta_max}} maximum theta{p_end}
+{p2colset 8 22 15 8}{p2col:{opt f}} F statistic{p_end}
+{p2colset 8 22 15 8}{p2col:{opt f_f}} F statistic for test of u_i=0{p_end}
+{p2colset 8 22 15 8}{p2col:{opt p}} p-value for model test{p_end}
+{p2colset 8 22 15 8}{p2col:{opt p}} p-value for test of u_i=0{p_end}
+{p2colset 8 22 15 8}{p2col:{opt chi2}} chi-squared{p_end}
+{p2colset 8 22 15 8}{p2col:{opt chi2}} chi-squared for comparison test{p_end}
+{p2colset 8 22 15 8}{p2col:{opt chi2_dev}} chi-squared test of deviance{p_end}
+{p2colset 8 22 15 8}{p2col:{opt chi2_dis}} chi-squared test of deviance dispersion{p_end}
+{p2colset 8 22 15 8}{p2col:{opt tol}} target tolerance{p_end}
+{p2colset 8 22 15 8}{p2col:{opt dif}} achieved tolerance{p_end}
+{p2colset 8 22 15 8}{p2col:{opt k}} number of parameters{p_end}
+{p2colset 8 22 15 8}{p2col:{opt k_aux}} number of auxiliary parameters{p_end}
+{p2colset 8 22 15 8}{p2col:{opt k_eq}} number of equations in e(b){p_end}
+{p2colset 8 22 15 8}{p2col:{opt k_eq_model}} number of equations in overall model test{p_end}
+{p2colset 8 22 15 8}{p2col:{opt k_dv}} number of dependent variables{p_end}
+{p2colset 8 22 15 8}{p2col:{opt n_quad}} number of quadrature points{p_end}
+{p2colset 8 22 15 8}{p2col:{opt phi}} scale parameter{p_end}
+{p2colset 8 22 15 8}{p2col:{opt stages}} number of sampling stages{p_end}
+{p2colset 8 22 15 8}{p2col:{opt ic}} number of iterations{p_end}
 
 {phang}
 {opth minfo(string)} allows users to choose from the following model information:
@@ -119,6 +164,9 @@
 {p2colset 8 15 15 8}{p2col:{opt mgroup}} model group{p_end}
 {p2colset 8 15 15 8}{p2col:{opt depvar}} dependent variable{p_end}
 {p2colset 8 15 15 8}{p2col:{opt cmd}} command{p_end}
+{p2colset 8 15 15 8}{p2col:{opt model}} model type{p_end}
+{p2colset 8 15 15 8}{p2col:{opt family}} distribution family{p_end}
+{p2colset 8 15 15 8}{p2col:{opt link}} link function{p_end}
 {p2colset 8 15 15 8}{p2col:{opt weight}} weight{p_end}
 
 {dlgtab:Covariates}

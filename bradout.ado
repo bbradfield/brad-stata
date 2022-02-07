@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradout.ado                                          **
 **   Purpose:      Outputs multiple estimation results in a clean table **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.0.0                                                **
-**   Date:         02/03/2022                                           **
+**   Version:      1.0.1                                                **
+**   Date:         02/07/2022                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -302,7 +302,7 @@ mata:
         /* Goodness of Fit */
 
           msi.name  = msi.name  \ ("r2" \ "r2_a"        \ "r2_p"      \ "r2_w"      \ "r2_o"       \ "r2_b"       \ "ll"                     \ "ll_0"                  \ "ll_c"                  \ "aic" \ "bic" \ "thta_min"    \ "thta_5"          \ "thta_50"          \ "thta_95"          \ "thta_max"   )
-          msi.slab  = msi.slab  \ ("R2" \ "Adj_R2"      \ "Pse_R2"    \ "Wit_R2"    \ "Ovr_R2"     \ "Btw_R2"     \ "LL(m)"                  \ "LL(0)"                 \ "LL('c)"                \ "AIC" \ "BIC" \ "ThtMin"      \ "Tht5"            \ "Tht50"            \ "Tht95"            \ "ThtMax"     )
+          msi.slab  = msi.slab  \ ("R2" \ "Adj_R2"      \ "Pse_R2"    \ "Wit_R2"    \ "Ovr_R2"     \ "Btw_R2"     \ "LL(m)"                  \ "LL(0)"                 \ "LL(c)"                 \ "AIC" \ "BIC" \ "ThtMin"      \ "Tht5"            \ "Tht50"            \ "Tht95"            \ "ThtMax"     )
           msi.llab  = msi.llab  \ ("R2" \ "Adjusted R2" \ "Pseudo R2" \ "Within R2" \ "Overall R2" \ "Between R2" \ "Log Likelihood (Model)" \ "Log Likelihood (Null)" \ "Log Likelihood (Comp)" \ "AIC" \ "BIC" \ "Theta (Min)" \ "Theta (5th Pct)" \ "Theta (50th Pct)" \ "Theta (95th Pct)" \ "Theta (Max)")
           msi.round = msi.round \ (4    \ 4             \ 4           \ 4           \ 4            \ 4            \ 4                        \ 4                       \ 4                       \ 2     \ 2     \ 4             \ 4                 \ 4                  \ 4                  \ 4            )
           msi.comma = msi.comma \ (0    \ 0             \ 0           \ 0           \ 0            \ 0            \ 0                        \ 0                       \ 0                       \ 0     \ 0     \ 0             \ 0                 \ 0                  \ 0                  \ 0            )
