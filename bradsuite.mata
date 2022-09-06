@@ -7,8 +7,8 @@ set matastrict on
 /*   Program:      bradsuite.mata                                       */
 /*   Purpose:      General functions & aliases for bradsuite programs   */
 /*   Programmers:  Brian Bradfield                                      */
-/*   Version:      0.1.0                                                */
-/*   Date:         03/26/2021                                           */
+/*   Version:      0.1.1                                                */
+/*   Date:         09/06/2022                                           */
 /*                                                                      */
 /*======================================================================*/
 /*======================================================================*/
@@ -61,6 +61,7 @@ mata:
                       `DataMat' needle)
     {
       `Integer' rows, cols
+      `Integer' i, j
 
       rows = rows(needle)
       cols = cols(needle)
@@ -93,7 +94,8 @@ mata:
     `RealVec' poslist(`DataVec'  haystack,
                       `DataVec'  needle)
     {
-      `RealVec' pos, output
+      `RealVec' output
+      `Pos'     pos
       `Integer' len, i
 
       output = J(rows(needle), cols(needle), .)
@@ -144,6 +146,28 @@ mata:
     }
 
 /*======================================================================*/
+/*   Functions - Matrix Functions                                       */
+/*======================================================================*/
+
+  /* function : shiftvec() */
+
+    `DataVec' shiftvec(`DataVec' ivec,
+                       `Real'    shift)
+    {
+      `Pos'     pos
+      `Integer' ilen
+
+      ilen = length(ivec)
+
+      if(ilen == 1) return(ivec)
+
+      if(shift == 1)       pos = range(2, ilen, 1) \ 1
+      else if(shift == -1) pos = ilen \ range(1, ilen - 1, 1)
+
+      return(ivec[pos])
+    }
+
+/*======================================================================*/
 /*   Functions - String Functions                                       */
 /*======================================================================*/
 
@@ -151,6 +175,7 @@ mata:
 
     `Tokens' gentokens(`String' istring)
     {
+      `Data'   t
       `Tokens' tokens
 
       t = tokeninit(" ", "", (`""""', `"`""'"', "()"), 1)
@@ -166,7 +191,7 @@ mata:
                           `String'    istart,
                           `String'    iend)
     {
-      `Integer' rows, cols
+      `Integer' rows, cols, len
       `Pos'     spos, epos, pos
 
       rows = rows(istring)
@@ -222,7 +247,9 @@ mata:
 
   /* function : addcols() */
 
-    `StringVec' addcols(`StringMat' istring)
+    `StringVec' addcols(`StringMat' istring,
+                      | `String'    sep)
+
     {
       `StringVec' values
       `Integer'   rows, cols
@@ -402,6 +429,69 @@ mata:
       }
 
       exit(error(errcode))
+    }
+
+  /* function : makerange() */
+
+    `DataMat' makerange(`DataVec' ivec,
+                      | `String'  sep)
+    {
+      `DataMat' values
+      `RealVec' rstart, rend
+      `Pos'     pos
+
+      values = sort(colshape(ivec, 1), 1)
+
+      rstart = (values :- 1) :!= shiftvec(values, -1)
+      rend   = (values :+ 1) :!= shiftvec(values,  1)
+
+      pos = selectindex((rstart :== 1) :| (rend :== 1))
+
+      values = values[pos]
+      rstart = rstart[pos]
+      rend   = rend[pos]
+
+      values = values, shiftvec(values, 1)
+      values[selectindex(rend), 2] = J(sum(rend), 1, .)
+
+      pos = selectindex(rstart :== 1)
+
+      if(args() == 2) return(strofreal(values[pos,1]) :+ (!rend[pos] :* (sep :+ strofreal(values[pos,2]))))
+
+      return(values[pos,.])
+    }
+
+  /* function : makerangexl() */
+
+    `DataMat' makerangexl(`StringVec' ivec,
+                        | `String'    sep)
+    {
+      `DataMat' values, tokens
+      `RealVec' rend
+      `Integer' ilen, tlen
+      `Integer' i
+      `Pos'     pos
+
+      ilen   = length(ivec)
+      tlen   = strlen(ivec)
+      values = J(ilen, 1, .)
+
+      for(i=ilen; i; i--)
+      {
+        tokens = ascii(ivec[i]) :- 64
+
+        values[i] = rowsum(tokens :* (26 :^ range(tlen[i] - 1, 0, -1)'))
+      }
+
+      values = makerange(values)
+      rend   = values[.,2] :== .
+      values = numtobase26(values)
+
+      if(args() == 2) return(values[.,1] :+ (!rend :* (sep :+ values[.,2])))
+
+      values[.,2] = !rend :* values[.,2]
+
+      return(values)
     }
 
 /*======================================================================*/
