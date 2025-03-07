@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.8.1  10oct2021}{...}
+{* *! version 1.8.2  07mar2025}{...}
 {vieweralsosee "[R] mean" "help mean"}{...}
 {viewerjumpto "Syntax" "bradmean##syntax"}{...}
 {viewerjumpto "Description" "bradmean##description"}{...}
@@ -42,6 +42,7 @@
 {synopt:{opth st:ats(string)}}select which statistics to be displayed{p_end}
 {synopt:{opth format(string)}}formatting options for displayed statistics{p_end}
 {synopt:{opth excel(string)}}Excel output options{p_end}
+{synopt:{opth collect(string)}}Excel collect options{p_end}
 {synoptline}
 {p2colreset}{...}
 {p 4 6 2}
@@ -165,7 +166,7 @@ estimator associated with the sample mean.
 {p2colset 8 27 28 8}{p2col:{opt nocomma}} ({bf:count} only) do not display thousands separators{p_end}
 
 {phang}
-{opth excel(string)} has the following options:
+{opth excel(string)} sets the options for outputting tables to Excel. If you see an error about "invalid formats", this is due to an Excel-level issue on the number of cell styles. Using the replace option or deleting the workbook before re-running should fix it in most circumstances. The following options are available:
 
 {p2colset 8 23 24 8}{p2col:{opth file(string)}} location of output file. Default is a file named {bf:bradmean_output.xlsx} in the current working directory{p_end}
 {p2colset 8 23 24 8}{p2col:{opth sheet(string)}} name of sheet to be used. Default is the first file in the sheet or {bf:Sheet1} in a new workbook{p_end}
@@ -175,3 +176,9 @@ estimator associated with the sample mean.
 {p2colset 8 23 24 8}{p2col:{opth font(string)}} choose the font face from {bf:Arial}, {bf:Calibri}, {bf:Garamond}, {bf:Helvetica}, {bf:TNR} (Times New Roman), or {bf:Verdana}. Default is {bf:Calibri}{p_end}
 {p2colset 8 23 24 8}{p2col:{opt size(#)}} choose the font size between 9 and 12. Default is {bf:11}{p_end}
 {p2colset 8 23 24 8}{p2col:{opth color(string)}} choose the color styles from {bf:bradmean}, {bf:monochrome}, {bf:rti}, {bf:material_red}, {bf:material_purple}, {bf:material_indigo}, {bf:material_blue}, {bf:material_green}, and {bf:material_orange}{p_end}
+
+{phang}
+{opth collect(string)} has the following options:
+
+{p2colset 8 23 24 8}{p2col:{opt save}} saves the current Excel output options to be executed later{p_end}
+{p2colset 8 23 24 8}{p2col:{opt export}} exports all currently saved Excel outputs. Once export is used, all previously saved Excel output options will be cleared. Note that export will always use the first Excel file specified in your currently saved Excel output options. For instance, if you save to {bf:file1.xlsx} then {bf:file2.xlsx}, export will save to {bf:file1.xlsx} only.{p_end}

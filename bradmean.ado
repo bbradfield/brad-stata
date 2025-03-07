@@ -8,8 +8,8 @@ include bradsuite.mata, adopath;
 **   Program:      bradmean.ado                                         **
 **   Purpose:      Computes multiple independent means in single table  **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.8.1                                                **
-**   Date:         10/05/2021                                           **
+**   Version:      1.8.2                                                **
+**   Date:         03/07/2025                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
@@ -36,6 +36,7 @@ include bradsuite.mata, adopath;
       DISplay(string)
       TITLE(string)
       EXCEL(string)
+      COLLECT(string)
     ];
 
   *----------------------------------------------------------*
@@ -101,11 +102,41 @@ include bradsuite.mata, adopath;
     mata: initOverInfo(bd);
     mata: initStatInfo(bd);
     mata: gatherResults(bd);
-    mata: printer(bd);
-    mata: createExcel(bd);
 
   *----------------------------------------------------------*
-  *   06. Cleaning Up                                        *
+  *   06. Exporting Results                                  *
+  *----------------------------------------------------------*;
+
+    mata: printer(bd);
+
+    if("`collect'" == "")
+    {;
+      mata: createExcelSingle(bd);
+    };
+
+    if(inlist("`collect'","save","export"))
+    {;
+      cap mata: length(bd_vec);
+
+      if(_rc != 0)
+      {;
+        mata: bd_vec = combBradmean(bd);
+      };
+      else
+      {;
+        mata: bd_vec = combBradmean(bd, bd_vec);
+      };
+    };
+
+    if("`collect'" == "export")
+    {;
+      mata: createExcelMultiple(bd_vec);
+
+      mata: mata drop bd_vec;
+    };
+
+  *----------------------------------------------------------*
+  *   07. Cleaning Up                                        *
   *----------------------------------------------------------*;
 
     mata: mata drop bd;
@@ -4523,13 +4554,13 @@ mata:
 /*   Mata Functions - Excel                                             */
 /*======================================================================*/
 
-  /* function : createExcel() */
+  /* function : createExcelSingle() */
 
-    void function createExcel(struct bradmean scalar bd)
+    void function createExcelSingle(struct bradmean scalar bd)
     {
-      `Boolean' newsheet
       `RealVec' row, col
       `Pos'     pos
+      `Integer' rc
 
       if(!bd.opt.excel.output) return
 
@@ -4541,48 +4572,36 @@ mata:
 
       /* Loading Book & Setting Worksheet */
 
-        newsheet = bd.opt.excel.bookreplace | bd.opt.excel.sheetreplace
-
         if(fileexists(bd.opt.excel.file_path))
         {
-          /* Loading Book */
+          if(bd.opt.excel.bookreplace)
+          {
+            rc = unlink(bd.opt.excel.file_path)
 
-            if(bd.opt.excel.bookreplace) B.clear_book(bd.opt.excel.file_path)
-
+            B.create_book(bd.opt.excel.file_path, bd.opt.excel.sheet, substr(pathsuffix(bd.opt.excel.file_path), 2))
+          }
+          else
+          {
             B.load_book(bd.opt.excel.file_path)
-
-          /* Setting Sheet */
 
             if(bd.opt.excel.sheet == "")
             {
-              B.set_sheet(bd.opt.excel.sheet = B.get_sheets()[1])
+              bd.opt.excel.sheet = B.get_sheets()[1]
             }
             else
             {
-              if(anyof(B.get_sheets(), bd.opt.excel.sheet))
-              {
-                B.set_sheet(bd.opt.excel.sheet)
-              }
-              else
-              {
-                B.add_sheet(bd.opt.excel.sheet)
-                newsheet = 1
-              }
-
-              if(bd.opt.excel.bookreplace & bd.opt.excel.sheet != "Sheet1") B.delete_sheet("Sheet1")
+              if(anyof(B.get_sheets(), bd.opt.excel.sheet)) B.set_sheet(bd.opt.excel.sheet)
+              else                                          B.add_sheet(bd.opt.excel.sheet)
             }
 
-          /* Clearing Sheet */
-
-            if(bd.opt.excel.sheetreplace) B.clear_sheet(B.query("sheetname"))
+            if(bd.opt.excel.sheetreplace) B.clear_sheet(bd.opt.excel.sheet)
+          }
         }
         else
         {
           if(bd.opt.excel.sheet == "") bd.opt.excel.sheet = "Sheet1"
 
           B.create_book(bd.opt.excel.file_path, bd.opt.excel.sheet, substr(pathsuffix(bd.opt.excel.file_path), 2))
-
-          newsheet = 1
         }
 
         B.set_mode("open")
@@ -4629,6 +4648,111 @@ mata:
         if(length(bd.oi.levels) == 0) excelLongNoOver(bd, B, row)
         else if(!bd.opt.display.wide) excelLongOver(bd, B, row)
         else                          excelWide(bd, B, row)
+
+      B.close_book()
+    }
+
+  /* function : createExcelMultiple() */
+
+    void function createExcelMultiple(struct bradmean vector bd)
+    {
+      `RealVec' row, col
+      `Pos'     pos
+      `Integer' len
+      `Integer' rc
+
+      if(!bd[1].opt.excel.output) return
+
+      /* Initializing Object */
+
+        class xl scalar B
+
+        B = xl()
+
+        len = length(bd)
+
+      /* Loading Book */
+
+        if(fileexists(bd[1].opt.excel.file_path))
+        {
+          if(bd[1].opt.excel.bookreplace)
+          {
+            rc = unlink(bd[1].opt.excel.file_path)
+
+            B.create_book(bd[1].opt.excel.file_path, bd[1].opt.excel.sheet, substr(pathsuffix(bd[1].opt.excel.file_path), 2))
+          }
+          else
+          {
+            B.load_book(bd[1].opt.excel.file_path)
+          }
+        }
+        else
+        {
+          if(bd[1].opt.excel.sheet == "") bd[1].opt.excel.sheet = "Sheet1"
+
+          B.create_book(bd[1].opt.excel.file_path, bd[1].opt.excel.sheet, substr(pathsuffix(bd[1].opt.excel.file_path), 2))
+        }
+
+        B.set_mode("open")
+        B.set_missing(".")
+
+      /* Exporting Data */
+
+        for(i=1; i<=len; i++)
+        {
+
+        /* Setting Worksheet */
+
+          if(bd[i].opt.excel.sheet == "") bd[i].opt.excel.sheet = B.get_sheets()[1]
+
+          if(anyof(B.get_sheets(), bd[i].opt.excel.sheet)) B.set_sheet(bd[i].opt.excel.sheet)
+          else                                             B.add_sheet(bd[i].opt.excel.sheet)
+
+          if(bd[i].opt.excel.sheetreplace) B.clear_sheet(bd[i].opt.excel.sheet)
+
+        /* Getting Initial Position */
+
+          if(bd[1].opt.excel.bookreplace | bd[i].opt.excel.sheetreplace)
+          {
+            row = 1
+          }
+          else
+          {
+            row = 1, 50
+            col = 1, 6
+
+            while(row[1] >= 1)
+            {
+              pos = selectindex(rowmax(B.get_cell_type(row, col) :!= "blank"))
+
+              if(length(pos) == 0)
+              {
+                row = row[1]
+                break
+              }
+              else
+              {
+                pos = pos[length(pos)] + row[1]
+                pos = pos, pos + 10
+
+                if(max(B.get_cell_type(pos, col) :!= "blank") == 0)
+                {
+                  row = pos[1] + 1
+                  break
+                }
+              }
+
+              row = row :+ 50
+            }
+          }
+
+        /* Creating Table */
+
+          if(length(bd[i].oi.levels) == 0) excelLongNoOver(bd[i], B, row)
+          else if(!bd[i].opt.display.wide) excelLongOver(bd[i], B, row)
+          else                             excelWide(bd[i], B, row)
+
+        }
 
       B.close_book()
     }
@@ -5912,6 +6036,18 @@ mata:
 
           B.set_fmtid(rpos, (1,1), fmt_title)
         }
+    }
+
+/*======================================================================*/
+/*   Mata Functions - Collect                                           */
+/*======================================================================*/
+
+  /* function : combBradmean() */
+
+    struct bradmean vector combBradmean(struct bradmean bd_new, | struct bradmean bd_old)
+    {
+      if(args() == 1) return(bd_new)
+      else            return(bd_old \ bd_new)
     }
 
 end

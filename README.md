@@ -7,7 +7,7 @@ Stata packages developed by RTI's bbradfield for Stata 15+
 | bradsuite    | N/A     | 11/16/17 | Installs all the following brad commands at once      |
 | bradbook     | 1.0.3   | 03/13/18 | Creates a cleaner codebook for export to Word         |
 | braddes      | 0.2.0   | 03/25/21 | Describe data in a single-line per variable format    |
-| bradmean     | 1.8.1   | 10/05/21 | Computes multiple independent means in a single table |
+| bradmean     | 1.8.2   | 03/07/25 | Computes multiple independent means in a single table |
 | bradmean_old | 1.3.8   | 02/16/18 | Computes multiple independent means in a single table |
 | bradout      | 1.0.1   | 02/07/22 | Outputs multiple estimation results in a clean table  |
 | bradsto      | 1.0.0   | 02/03/22 | Stores estimates for use in bradout                   |
