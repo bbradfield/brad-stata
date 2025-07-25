@@ -1,0 +1,13 @@
+d 'bradout': outputs multiple estimation results in a clean table
+d
+d   Displays cross-tabs of variables, allowing 3+ variables
+d
+d Version 1.0.0
+d
+d Distribution-Date: 25jul2025
+d
+d Author: Brian Bradfield
+d Support: email bbradfield@rti.org
+d
+f biggertab.ado
+f biggertab.sthlp

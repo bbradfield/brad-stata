@@ -1,15 +1,19 @@
 d 'bradsuite': the suite of brad ado commands
 d
+d   biggertab
 d   bradbook
 d   braddes
 d   bradmean
 d   bradout
+d   bradsto
 d
-d Distribution-Date: 06aug2022
+d Distribution-Date: 25jul2025
 d
 d Author: Brian Bradfield
 d Support: email bbradfield@rti.org
 d
+f biggertab.ado
+f biggertab.sthlp
 f bradbook.ado
 f bradbook.sthlp
 f braddes.ado
