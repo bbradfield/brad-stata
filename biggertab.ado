@@ -8,13 +8,13 @@ version 15.1
 **   Purpose:      Displays cross-tabs of variables and allows more     **
 **                 than 3 variables                                     **
 **   Programmers:  Brian Bradfield                                      **
-**   Version:      1.0.0                                                **
-**   Date:         07/25/2025                                           **
+**   Version:      1.0.1                                                **
+**   Date:         11/03/2025                                           **
 **                                                                      **
 **======================================================================**
 **======================================================================**;
 
-  program define biggertab, nclass;
+  program define biggertab_dev, nclass;
   syntax varlist [if] [in],
     [
       SEPBY(varlist)
@@ -23,6 +23,7 @@ version 15.1
       NOLabel
       ZERO
       NOMISS
+      STATs(string)
     ];
 
     quietly
@@ -32,9 +33,48 @@ version 15.1
 
       preserve;
 
+    /* Getting Statistics */
+
+      local stats = strtrim(strlower("`stats'"));
+
+      if("`stats'" == "none")
+      {;
+        local stats = "";
+      };
+      else
+      {;
+        local full_stats freq pct cumfreq cumpct rowfreq rowpct;
+        local stats      `stats';
+
+        local stats : list full_stats & stats;
+
+        local stats = cond("`stats'" == "", "freq pct", "`stats'");
+        local stats = subinstr(subinstr(subinstr(subinstr("`stats'", "freq", "Freq", .), "pct", "Pct", .), "cum", "Cum", .), "row", "Row", .);
+      };
+
     /* Generating Frequency & Percent */
 
-      contract `varlist' `if' `in', freq(Freq) percent(Pct) `zero' `nomiss';
+      contract `varlist' `if' `in', freq(Freq) percent(Pct) cfreq(CumFreq) cpercent(CumPct) `zero' `nomiss';
+
+    /* Generating Row Percent */
+
+      if("`sepby'" != "")
+      {;
+        if(strpos("`stats'", "row") != 0)
+        {;
+          bysort `sepby' (CumFreq): generate RowFreq = CumFreq - CumFreq[1] + Freq[1];
+
+          by `sepby': generate RowPct = (Freq / RowFreq[_N]) * 100;
+
+          format RowPct %8.2f;
+        };
+
+        local sepby = "sepby(`sepby')";
+      };
+      else
+      {;
+        local sepby = "sep(9999)";
+      };
 
     /* Displaying Title */
 
@@ -45,14 +85,7 @@ version 15.1
 
     /* Displaying Table */
 
-      if("`sepby'" == "")
-      {;
-        noi list `varlist' Freq Pct, sep(9999) noobs abb(32) `divider' `nolabel';
-      };
-      else
-      {;
-        noi list `varlist' Freq Pct, sepby(`sepby') noobs abb(32) `divider' `nolabel';
-      };
+      noi list `varlist' `stats', `sepby' noobs abb(32) `divider' `nolabel';
 
     /* Restoring Data */
 
@@ -61,4 +94,3 @@ version 15.1
     };
 
   end;
-

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  25jul2025}{...}
+{* *! version 1.0.1  03nov2025}{...}
 {vieweralsosee "[D] mean" "help contract"}{...}
 {viewerjumpto "Syntax" "biggertab##syntax"}{...}
 {viewerjumpto "Description" "biggertab##description"}{...}
@@ -22,6 +22,7 @@
 {synopthdr}
 {synoptline}
 {syntab :Options}
+{synopt :{opth st:ats(string)}}select which statistics to be displayed{p_end}
 {synopt :{opth sepby(varlist2)}}draw a separator line whenever {it:varlist2} values change{p_end}
 {synopt :{opth title(string)}}specifies an optional custom title{p_end}
 {synopt :{opt div:ider}}draw divider lines between columns{p_end}
@@ -43,6 +44,16 @@ overflow.
 {title:Options}
 
 {dlgtab:Options}
+
+{phang}
+{opth st:ats(string)} allows users to choose from the following statistics:
+
+{p2colset 8 16 15 8}{p2col:{opt freq}} frequency{p_end}
+{p2colset 8 16 15 8}{p2col:{opt pct}} percent{p_end}
+{p2colset 8 16 15 8}{p2col:{opt cumfreq}} cumulative frequency{p_end}
+{p2colset 8 16 15 8}{p2col:{opt cumpct}} cumulative percent{p_end}
+{p2colset 8 16 15 8}{p2col:{opt rowfreq}} row frequency (within the sepby {varlist}){p_end}
+{p2colset 8 16 15 8}{p2col:{opt rowpct}} row percent (within the sepby {varlist}){p_end}
 
 {phang}
 {opth sepby(varlist2)} draws a separator line whenever {it:varlist2} values change. The default
