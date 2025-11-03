@@ -54,6 +54,7 @@ overflow.
 {p2colset 8 16 15 8}{p2col:{opt cumpct}} cumulative percent{p_end}
 {p2colset 8 16 15 8}{p2col:{opt rowfreq}} row frequency (within the sepby {varlist}){p_end}
 {p2colset 8 16 15 8}{p2col:{opt rowpct}} row percent (within the sepby {varlist}){p_end}
+{p2colset 8 16 15 8}{p2col:{opt none}} displays no statistics{p_end}
 
 {phang}
 {opth sepby(varlist2)} draws a separator line whenever {it:varlist2} values change. The default
