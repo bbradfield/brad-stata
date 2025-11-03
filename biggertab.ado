@@ -14,7 +14,7 @@ version 15.1
 **======================================================================**
 **======================================================================**;
 
-  program define biggertab_dev, nclass;
+  program define biggertab, nclass;
   syntax varlist [if] [in],
     [
       SEPBY(varlist)
